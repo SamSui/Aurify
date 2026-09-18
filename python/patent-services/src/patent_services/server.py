@@ -13,10 +13,12 @@ cordis.yml wiring).
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from mcp.server.mcpserver import MCPServer
 
 from . import experiments
-from .export import export_application, export_project
+from .export import _export_summary, export_application, export_project
 from .parsing import parse_docx, parse_docx_to_file
 from .prior_art import search_cn_patents
 from .render import render_figure, render_html_figure
@@ -54,9 +56,12 @@ def export_disclosure(project_dir: str, fmt: str = "docx") -> str:
         fmt: ``docx`` (default) or ``pdf``.
 
     Returns:
-        The written file's path.
+        The written file's path plus the embedded figure count — the model
+        reads it back and must not present a zero-figure export as complete
+        when the 附图说明 chapter declares figures.
     """
-    return export_project(project_dir, fmt)
+    written = export_project(project_dir, fmt)
+    return _export_summary(written, Path(project_dir))
 
 
 @mcp.tool()
@@ -71,9 +76,12 @@ def export_application_docs(project_dir: str, fmt: str = "docx") -> str:
         fmt: ``docx`` (default) or ``pdf``.
 
     Returns:
-        The written file's path.
+        The written file's path plus the embedded figure count, with a
+        warning when the 附图说明 chapter declares figures the export did
+        not embed (naming misses die loudly here, not in the reader's hands).
     """
-    return export_application(project_dir, fmt)
+    written = export_application(project_dir, fmt)
+    return _export_summary(written, Path(project_dir))
 
 
 @mcp.tool()

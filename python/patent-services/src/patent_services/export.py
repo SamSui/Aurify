@@ -79,8 +79,11 @@ BULLET_MARK = "●"
 _CHINESE_DIGITS = "零一二三四五六七八九"
 
 #: Figure images live at the figures root (``figures/图N.png`` — sources in
-#: ``figures/source/`` are not deliverables). Only ``图N.png`` files count.
-_FIGURE_FILE = re.compile(r"^图(\d+)\.png$", re.IGNORECASE)
+#: ``figures/source/`` are not deliverables). Bare ``图N.png`` and suffixed
+#: ``图N-名称.png`` names both count; anything else (previews, sources) never
+#: embeds, so a naming miss shows up as a zero-figure export rather than a
+#: silent half-deliverable.
+_FIGURE_FILE = re.compile(r"^图(\d+)(?:-.+)?\.png$", re.IGNORECASE)
 
 #: One 附图说明 chapter line naming a figure: ``图1 为本发明所述方法的流程总览图；``
 _FIGURE_CAPTION = re.compile(r"图(\d+)\s*[为是][:：]?\s*([^；。\n]+)")
@@ -111,6 +114,23 @@ def _collect_figures(root: Path) -> list[tuple[int, Path, str | None]]:
         for match in _FIGURE_CAPTION.finditer(drawings.read_text(encoding="utf-8")):
             captions.setdefault(int(match.group(1)), match.group(2).strip())
     return [(number, path, captions.get(number)) for number, path in numbered]
+
+
+def _export_summary(written: str, root: Path) -> str:
+    """Describe an export's embedded figure set so a silent zero-figure
+    deliverable cannot pass for complete: the returned path carries the
+    collected count, plus a warning when the 附图说明 chapter declares more
+    figures than the figures root supplied."""
+    figures = _collect_figures(root)
+    drawings = root / "chapters" / "08-drawings.md"
+    declared = 0
+    if drawings.is_file():
+        declared = len({int(m.group(1)) for m in _FIGURE_CAPTION.finditer(drawings.read_text(encoding="utf-8"))})
+    note = ""
+    if declared > len(figures):
+        note = (f"；警告：附图说明声明 {declared} 张，figures/ 根只收集到 {len(figures)} 张"
+                f"（成品须命名 图N.png 或 图N-名称.png），缺的图没有进文档")
+    return f"{written}（内嵌附图 {len(figures)} 张{note}）"
 
 
 def _add_figure(document, path: Path, number: int, caption: str | None, *, east_asia: str, size: Pt) -> None:

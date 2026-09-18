@@ -213,6 +213,36 @@ def test_export_docx_skips_non_root_figure_files(tmp_path):
     assert len(Document(output).inline_shapes) == 2
 
 
+def test_export_collects_suffixed_figure_names(tmp_path):
+    project = add_figures(build_project(tmp_path / "project"))
+    figures = project / "figures"
+    (figures / "图1.png").rename(figures / "图1-流程总览.png")
+    (figures / "图2.png").rename(figures / "图2-系统架构.png")
+    output = export_project(str(project))
+    document = Document(output)
+    assert len(document.inline_shapes) == 2
+    texts = [p.text for p in document.paragraphs]
+    assert "图1" in texts and "图2" in texts
+
+
+def test_export_summary_warns_when_declared_figures_missing(tmp_path):
+    from patent_services.export import _export_summary
+
+    project = add_figures(build_project(tmp_path / "project"))
+    (project / "chapters" / "08-drawings.md").write_text(
+        "# 附图说明\n\n图1 为本发明所述方法的流程总览图；\n图2 为本发明系统的架构框图；\n图3 为增强流程图。\n",
+        encoding="utf-8",
+    )
+    summary = _export_summary("/tmp/out.docx", project)
+    assert "内嵌附图 2 张" in summary
+    assert "警告" in summary
+    assert "声明 3 张" in summary
+    assert "只收集到 2 张" in summary
+
+    ok = _export_summary("/tmp/out.docx", add_figures(build_project(tmp_path / "other")))
+    assert "内嵌附图 2 张" in ok and "警告" not in ok
+
+
 def build_application_project(root):
     (root / "application").mkdir(parents=True)
     (root / "patent.yml").write_text("formatVersion: 1\nname: 一种测试存储装置\nstatus: application\n", encoding="utf-8")
