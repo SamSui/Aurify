@@ -1,7 +1,7 @@
-# 点金 · dsh 专利撰写插件
+# 点金 Aurify
 
-> 不是每块石头都值得点——先验金，再点金。
-> [DeepSeek Harness（dsh）](https://github.com/deepseek-ai/deepseek-harness) 的专利撰写把关人。
+> Not every stone is worth gilding — appraise the idea before you gild it.
+> 先验金，再点金。[DeepSeek Harness（dsh）](https://github.com/deepseek-ai/deepseek-harness) 的专利撰写把关人 · the patent-writing gatekeeper for dsh。
 
 丢一个技术点子，点金先检索中国专利给出「建议写 / 收窄后写 / 不建议写」的评估（附公开号证据，可以反驳它），确认方向后再带你走完全流程：五方对齐访谈 → 八章交底书 → 附图与仿真实验 → 七维审查 → docx/PDF 导出。
 

@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-A personal invention-disclosure drafting layer over [`dsh-base`](../base/README.md) — the `patent` profile's third bundle layer. [`cordis.patch.yml`](cordis.patch.yml) inserts the feature rows: the [`tool-patent`](../../patent/tool-patent/README.md) scorer, the `patent-assets` plugin (registers the shipped `skills/` as runtime skills), the [`command-patent-review`](../../patent/command-patent-review/README.md) deterministic review, and the environment-gated [`patent-services`](../../../python/patent-services/README.md) MCP row. The bundle is persona-free; the persona belongs to the profile layer. Drafting is file-first: a project is a Markdown directory the agent maintains through the base tools while the user edits the same files. Product name 点金 — touch of gold: appraise the idea against prior art before drafting it.
+A personal invention-disclosure drafting layer over [`dsh-base`](../base/README.md) — the `patent` profile's third bundle layer. [`cordis.patch.yml`](cordis.patch.yml) inserts the feature rows: the [`tool-patent`](../../patent/tool-patent/README.md) scorer, the `patent-assets` plugin (registers the shipped `skills/` as runtime skills), the [`command-patent-review`](../../patent/command-patent-review/README.md) deterministic review, and the environment-gated [`patent-services`](../../../python/patent-services/README.md) MCP row. The bundle is persona-free; the persona belongs to the profile layer. Drafting is file-first: a project is a Markdown directory the agent maintains through the base tools while the user edits the same files. Product name Aurify (点金, touch of gold): appraise the idea against prior art before drafting it.
 
 
 
