@@ -1,0 +1,110 @@
+/* Coverage toolview: readiness card with dimension chips and point counts. */
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px 0;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.title {
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.badge {
+  font-size: 11px;
+  line-height: 16px;
+  padding: 0 8px;
+  border-radius: 8px;
+  border: 1px solid var(--dsw-alias-line-primary);
+  color: var(--dsw-alias-text-secondary);
+  white-space: nowrap;
+}
+
+.badge[data-tone='ok'] {
+  color: var(--dsw-alias-text-success);
+  border-color: var(--dsw-alias-text-success);
+}
+
+.badge[data-tone='error'] {
+  color: var(--dsw-alias-text-critical);
+  border-color: var(--dsw-alias-text-critical);
+}
+
+.badge[data-tone='warning'] {
+  color: var(--dsw-alias-text-warning);
+  border-color: var(--dsw-alias-text-warning);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.chip {
+  font-size: 11px;
+  line-height: 18px;
+  padding: 0 8px;
+  border-radius: 4px;
+  border: 1px dashed var(--dsw-alias-line-secondary);
+  color: var(--dsw-alias-text-tertiary);
+}
+
+.chip[data-filled] {
+  border-style: solid;
+  color: var(--dsw-alias-text-primary);
+  background: var(--dsw-alias-bg-hover);
+}
+
+.alignment {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--dsw-alias-text-secondary);
+}
+
+.counts {
+  display: inline-flex;
+  gap: 2px;
+  font-variant-numeric: tabular-nums;
+  color: var(--dsw-alias-text-primary);
+}
+
+.count[data-zero] {
+  color: var(--dsw-alias-text-critical);
+}
+
+.raw {
+  font-size: 11px;
+  color: var(--dsw-alias-text-tertiary);
+}
+
+.raw summary {
+  cursor: pointer;
+}
+
+.raw pre {
+  margin: 4px 0 0;
+  padding: 6px 8px;
+  overflow: auto;
+  font-size: 11px;
+  line-height: 1.5;
+  border-radius: 4px;
+  background: var(--dsw-alias-bg-hover);
+  white-space: pre-wrap;
+  word-break: break-word;
+}

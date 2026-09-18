@@ -1,0 +1,24 @@
+# The CJK-font overlay the docker drawio fallback runs: the community headless
+# exporter plus Noto CJK, so Chinese figure labels render as glyphs instead of
+# tofu boxes, and a fontconfig alias that resolves drawio's default Helvetica
+# to the same CJK sans — without it, regular-weight CJK text falls back to a
+# serif face while bold text lands on the sans face, splitting one figure
+# across two families. Pin the FROM tag when the upstream image drifts. Build
+# from this directory:
+#   docker build -t dsh-patent/drawio-export:cjk -f Dockerfile.drawio .
+FROM rlespinasse/drawio-export:latest
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends fonts-noto-cjk \
+    && rm -rf /var/lib/apt/lists/* \
+    && printf '%s\n' \
+        '<?xml version="1.0"?>' \
+        '<!DOCTYPE fontconfig SYSTEM "fonts.dtd">' \
+        '<fontconfig>' \
+        '  <match target="pattern">' \
+        '    <test name="family"><string>Helvetica</string></test>' \
+        '    <edit name="family" mode="prepend" binding="strong"><string>Noto Sans CJK SC</string></edit>' \
+        '  </match>' \
+        '</fontconfig>' \
+        > /etc/fonts/conf.d/99-helvetica-noto-cjk.conf \
+    && fc-cache -f || true

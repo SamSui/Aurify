@@ -1,0 +1,155 @@
+/* Claims-lint toolview: count split, violation list, verdict badge. */
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px 0;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.title {
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.badge {
+  font-size: 11px;
+  line-height: 16px;
+  padding: 0 8px;
+  border-radius: 8px;
+  border: 1px solid var(--dsw-alias-line-primary);
+  color: var(--dsw-alias-text-secondary);
+  white-space: nowrap;
+}
+
+.badge[data-tone='ok'] {
+  color: var(--dsw-alias-text-success);
+  border-color: var(--dsw-alias-text-success);
+}
+
+.badge[data-tone='error'] {
+  color: var(--dsw-alias-text-critical);
+  border-color: var(--dsw-alias-text-critical);
+}
+
+.badge[data-tone='warning'] {
+  color: var(--dsw-alias-text-warning);
+  border-color: var(--dsw-alias-text-warning);
+}
+
+.badge[data-tone='running'] {
+  color: var(--dsw-alias-text-secondary);
+}
+
+.stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  font-size: 11px;
+  color: var(--dsw-alias-text-secondary);
+}
+
+.stat {
+  font-variant-numeric: tabular-nums;
+}
+
+.stat[data-tone] {
+  color: var(--dsw-alias-text-secondary);
+}
+
+.stat[data-tone='error'] {
+  color: var(--dsw-alias-text-critical);
+}
+
+.stat[data-tone='warning'] {
+  color: var(--dsw-alias-text-warning);
+}
+
+.statValue {
+  font-weight: 600;
+  color: inherit;
+}
+
+.violationsTitle {
+  font-size: 11px;
+  color: var(--dsw-alias-text-tertiary);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.violation {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.rule {
+  flex: none;
+  padding: 0 5px;
+  border-radius: 3px;
+  font-weight: 600;
+  font-family: var(--dsw-alias-font-mono, monospace);
+  background: var(--dsw-alias-bg-hover);
+  color: var(--dsw-alias-text-secondary);
+}
+
+.violation[data-severity='error'] .rule {
+  color: var(--dsw-alias-text-critical);
+}
+
+.violation[data-severity='warning'] .rule {
+  color: var(--dsw-alias-text-warning);
+}
+
+.claim {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  color: var(--dsw-alias-text-tertiary);
+}
+
+.message {
+  min-width: 0;
+  color: var(--dsw-alias-text-primary);
+  word-break: break-word;
+}
+
+.raw {
+  font-size: 11px;
+  color: var(--dsw-alias-text-tertiary);
+}
+
+.raw summary {
+  cursor: pointer;
+}
+
+.raw pre {
+  margin: 4px 0 0;
+  padding: 6px 8px;
+  overflow: auto;
+  font-size: 11px;
+  line-height: 1.5;
+  border-radius: 4px;
+  background: var(--dsw-alias-bg-hover);
+  white-space: pre-wrap;
+  word-break: break-word;
+}

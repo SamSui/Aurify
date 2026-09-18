@@ -1,0 +1,98 @@
+/* Patent dashboard tab: sectioned project overview. */
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 8px 4px;
+  font-size: 12px;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.projectName {
+  font-weight: 600;
+  color: var(--dsw-alias-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.refresh {
+  flex: none;
+  border: 1px solid var(--dsw-alias-line-primary);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dsw-alias-text-secondary);
+  font-size: 11px;
+  line-height: 20px;
+  padding: 0 10px;
+  cursor: pointer;
+}
+
+.refresh:hover {
+  color: var(--dsw-alias-text-primary);
+}
+
+.refresh:disabled {
+  cursor: default;
+  color: var(--dsw-alias-text-tertiary);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sectionTitle {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--dsw-alias-text-tertiary);
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rowLine {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--dsw-alias-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hint {
+  color: var(--dsw-alias-text-tertiary);
+}
+
+.names {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--dsw-alias-text-primary);
+}
+
+.names li {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.empty {
+  color: var(--dsw-alias-text-tertiary);
+}

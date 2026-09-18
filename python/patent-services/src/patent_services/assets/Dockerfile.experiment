@@ -1,0 +1,37 @@
+# The patent experiment runner: a batteries-included Python scientific stack
+# with CJK fonts, so simulation experiments run in one reproducible
+# environment and matplotlib renders Chinese labels without tofu. Built from
+# the patent-services assets and published to Docker Hub; the run_experiment
+# MCP tool auto-pulls it on first use. Rebuild and re-push under the same tag
+# whenever the baked stack changes.
+FROM python:3.12-slim
+
+# Mainland builds pass -i mirrors through here without baking one into the
+# published image.
+ARG PIP_INDEX_URL=https://pypi.org/simple
+
+# Same idea for the apt layer: point it at a reachable Debian mirror for the
+# build; the published image's sources stay whatever the base ships.
+ARG APT_MIRROR=deb.debian.org
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    MPLCONFIGDIR=/opt/mpl
+
+RUN if [ "$APT_MIRROR" != "deb.debian.org" ]; then sed -i "s|deb.debian.org|$APT_MIRROR|g" /etc/apt/sources.list.d/debian.sources; fi \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends fonts-noto-cjk fontconfig \
+    && fc-cache -f \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip install --index-url "$PIP_INDEX_URL" numpy scipy pandas matplotlib openpyxl
+
+# matplotlib consults $MPLCONFIGDIR/matplotlibrc first, so one shipped config
+# gives every experiment the CJK sans family and the ASCII minus sign without
+# any per-script setup.
+RUN mkdir -p /opt/mpl
+COPY matplotlibrc /opt/mpl/matplotlibrc
+
+WORKDIR /workspace

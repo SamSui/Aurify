@@ -1,0 +1,257 @@
+"""Patent simulation experiments in a docker runner with an automatic run log.
+
+The experiment code lives file-first in the project (the model writes it
+through the ordinary fs tools) under ``experiments/<slug>/`` — one directory
+per experiment with its entry script, ``requirements.txt`` for the deps
+beyond the image's baked stack, and ``results/`` for every run artifact.
+:func:`run_experiment` executes one experiment in the docker image
+(:data:`DEFAULT_EXPERIMENT_IMAGE`, published to Docker Hub and built from the
+shipped ``assets/Dockerfile.experiment`` — a Python scientific stack with CJK
+fonts, so matplotlib renders Chinese labels without tofu; a missing image
+auto-pulls, and a failed pull fails loud with pull/build guidance) with the
+project mounted at ``/workspace``. Every invocation — success or failure —
+appends one record (timestamp, image, command, exit code, output tail) to the
+experiment's ``results/run-log.md``, the run ledger the persona points
+every quoted number at.
+"""
+
+from __future__ import annotations
+
+import datetime as _datetime
+import os
+import re
+import subprocess
+from pathlib import Path
+import shutil
+
+#: The experiment slug: one path segment under ``experiments/``, nothing more.
+SLUG_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+
+#: Commands the runner accepts, executed by ``sh -c`` inside the container.
+DEFAULT_COMMAND = "python run.py"
+
+#: Bounds of the caller-supplied timeout: long enough for real simulations,
+#: short enough that a hung run cannot stall a session for hours.
+MIN_TIMEOUT_SECONDS = 30
+MAX_TIMEOUT_SECONDS = 7200
+
+#: Seconds one docker pull of the runner image may run before failing loud:
+#: the image carries the scientific stack, so a fresh fetch dwarfs a run.
+PULL_TIMEOUT_SECONDS = 600
+
+#: Image the runner executes: the CJK-font Python scientific stack, built
+#: from the shipped :data:`DOCKERFILE` and published to Docker Hub, so a
+#: fresh machine auto-pulls it on first use instead of failing. Rebuilt and
+#: re-pushed under the same tag whenever the baked stack changes.
+DEFAULT_EXPERIMENT_IMAGE = "q771103517/dsh-patent-experiment:latest"
+
+#: Environment variable overriding the docker runner image.
+DOCKER_IMAGE_ENV = "DSH_PATENT_EXPERIMENT_IMAGE"
+
+#: Shipped Dockerfile building the runner image (CJK fonts on top of the
+#: Python scientific stack).
+DOCKERFILE = Path(__file__).resolve().parent / "assets" / "Dockerfile.experiment"
+
+#: How much of a run's combined output travels back to the model and into the
+#: run log: enough to carry the numbers, small enough to protect the context.
+OUTPUT_TAIL_CHARS = 4000
+
+#: Where the run ledger lives, relative to the experiment directory.
+RUN_LOG_NAME = "run-log.md"
+
+DOCKER_GUIDANCE = (
+    "运行仿真实验需要 docker 容器（保证环境一致、可复现）。未检测到 docker 命令："
+    "请先安装并启动 Docker Desktop（https://docs.docker.com/desktop/）。"
+    "调试期间可以本地跑（bash/pwsh），但正式写进交底书的数据必须经 run_experiment 重跑落档。"
+)
+
+
+def validate_experiment(project_dir: Path, experiment: str) -> Path:
+    """Resolve and validate one experiment directory.
+
+    Args:
+        project_dir: the patent project directory holding ``experiments/``.
+        experiment: the experiment slug (a single path segment).
+
+    Returns:
+        The experiment directory's absolute path.
+
+    Raises:
+        ValueError: the slug is not a single safe path segment, or the
+            directory does not exist under ``experiments/``.
+    """
+    if not SLUG_PATTERN.match(experiment):
+        raise ValueError(
+            f"实验名必须是单个目录名（字母、数字、点、下划线、连字符）：{experiment}"
+        )
+    directory = project_dir / "experiments" / experiment
+    if not directory.is_dir():
+        raise ValueError(f"实验目录不存在：{directory}（先在 experiments/ 下建好实验再运行）")
+    return directory
+
+
+def run_experiment(
+    project_dir: str,
+    experiment: str,
+    command: str = DEFAULT_COMMAND,
+    timeout_seconds: int = 1800,
+) -> str:
+    """Run one experiment in the docker runner and record it in the run log.
+
+    The project directory mounts at ``/workspace``; the container's working
+    directory is the experiment directory, so the script's relative writes
+    land in ``results/`` naturally. When the experiment has a
+    ``requirements.txt``, it installs before the command runs. The run log
+    records the invocation even when it fails or times out.
+
+    Args:
+        project_dir: the patent project directory (absolute path recommended).
+        experiment: the experiment slug under ``experiments/``.
+        command: the shell command to run there (default ``python run.py``).
+        timeout_seconds: wall-clock budget, 30-7200 (default 1800).
+
+    Returns:
+        The run's combined output tail, followed by the run log's path.
+
+    Raises:
+        ValueError: a bad slug, a missing experiment directory, or an
+            out-of-range timeout.
+        RuntimeError: docker is unusable, the runner image is missing and
+            cannot be pulled, or the command failed (its output tail is
+            carried in the message).
+    """
+    if not MIN_TIMEOUT_SECONDS <= timeout_seconds <= MAX_TIMEOUT_SECONDS:
+        raise ValueError(
+            f"timeout_seconds 必须在 {MIN_TIMEOUT_SECONDS}-{MAX_TIMEOUT_SECONDS} 之间：{timeout_seconds}"
+        )
+    root = Path(project_dir).resolve()
+    if not root.is_dir():
+        raise ValueError(f"项目目录不存在：{project_dir}")
+    directory = validate_experiment(root, experiment)
+    image = os.environ.get(DOCKER_IMAGE_ENV, DEFAULT_EXPERIMENT_IMAGE)
+    ensure_image(image)
+    script = f'if [ -f requirements.txt ]; then pip install --no-input -q -r requirements.txt; fi; {command}'
+    started = _datetime.datetime.now().astimezone()
+    timed_out = False
+    try:
+        completed = subprocess.run(
+            [
+                "docker",
+                "run",
+                "--rm",
+                "-v",
+                f"{root.as_posix()}:/workspace",
+                "-w",
+                f"/workspace/experiments/{experiment}",
+                image,
+                "sh",
+                "-c",
+                script,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=timeout_seconds,
+            check=False,
+        )
+        code: int | None = completed.returncode
+        output = (completed.stdout or "") + (completed.stderr or "")
+    except subprocess.TimeoutExpired as expired:
+        timed_out = True
+        code = None
+        output = _as_text(expired.stdout or "") + _as_text(expired.stderr or "")
+    tail = output.strip()[-OUTPUT_TAIL_CHARS:]
+    append_run_log(directory, started, image, command, code, tail)
+    if timed_out:
+        raise RuntimeError(
+            f"实验超时（>{timeout_seconds}s）：{experiment}。已记入运行日志；"
+            f"优化脚本或提高 timeout_seconds 后重跑。输出尾部：\n{tail}"
+        )
+    if code != 0:
+        raise RuntimeError(
+            f"实验运行失败（exit {code}）：{experiment}。已记入运行日志。输出尾部：\n{tail}"
+        )
+    log_path = directory / "results" / RUN_LOG_NAME
+    return f"实验完成（exit 0）。输出尾部：\n{tail}\n\n运行记录：{log_path}"
+
+
+def _as_text(raw: str | bytes) -> str:
+    """Decode one captured-output chunk to text, whatever flavor arrived."""
+    if isinstance(raw, bytes):
+        return raw.decode("utf-8", errors="replace")
+    return raw
+
+
+def append_run_log(
+    directory: Path,
+    started: _datetime.datetime,
+    image: str,
+    command: str,
+    code: int | None,
+    tail: str,
+) -> Path:
+    """Append one run record to the experiment's run log.
+
+    Args:
+        directory: the experiment directory; the log lives at
+            ``results/run-log.md`` beside the run artifacts.
+        started: the invocation's local time with offset.
+        image: the docker image the run used.
+        command: the shell command the run executed.
+        code: the exit code, or ``None`` for a timeout.
+        tail: the combined output's tail chars.
+
+    Returns:
+        The run log's path.
+    """
+    results = directory / "results"
+    results.mkdir(parents=True, exist_ok=True)
+    log_path = results / RUN_LOG_NAME
+    header = (
+        f"\n## {started.isoformat(timespec='seconds')}\n\n"
+        f"- 镜像：`{image}`\n"
+        f"- 命令：`{command}`\n"
+        f"- 退出码：{'超时' if code is None else code}\n"
+    )
+    body = f"- 输出尾部：\n\n```text\n{tail}\n```\n" if tail else ""
+    with log_path.open("a", encoding="utf-8") as handle:
+        handle.write(header + body)
+    return log_path
+
+
+def ensure_image(image: str) -> None:
+    """Make the runner image present, pulling it when missing.
+
+    Args:
+        image: the image reference to inspect or pull.
+
+    Raises:
+        RuntimeError: the docker CLI is absent, or the image is missing and
+            the pull fails (with pull/build guidance in the message).
+    """
+    if shutil.which("docker") is None:
+        raise RuntimeError(DOCKER_GUIDANCE)
+    inspected = subprocess.run(
+        ["docker", "image", "inspect", image],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if inspected.returncode == 0:
+        return
+    try:
+        pulled = subprocess.run(
+            ["docker", "pull", image],
+            capture_output=True,
+            text=True,
+            timeout=PULL_TIMEOUT_SECONDS,
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        pulled = None
+    if pulled is None or pulled.returncode != 0:
+        detail = "拉取超时" if pulled is None else (pulled.stderr or pulled.stdout or "").strip()
+        raise RuntimeError(
+            f"实验镜像不存在且拉取失败：{image}（{detail}）。"
+            f"请检查网络后重试 docker pull {image}，或本地构建："
+            f'docker build -t {image} -f "{DOCKERFILE}" "{DOCKERFILE.parent}"。'
+        )

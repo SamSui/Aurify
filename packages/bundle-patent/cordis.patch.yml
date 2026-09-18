@@ -1,0 +1,51 @@
+# The patent-writing bundle: a capability layer over dsh-base — the workflow
+# engine re-enable, the inserted tool/assets/command/MCP rows, and the web
+# cards' host-side presentation meta. Deliberately persona-free: the patent
+# profile's own cordis.patch.yml carries the patent-assistant persona (see the
+# bundle README's "The persona lives in the profile"), so any profile can
+# install this bundle for its capabilities without surrendering its own.
+
+# The review command is a host-plane plugin that statically injects
+# `workflowEngine`, while the web composition disables this host-plane row
+# because agent presets own the model-facing workflow tools. The preset copies
+# publish into isolated realms, so this re-enabled host instance serves only
+# /patent-review and collides with no preset's engine. Both engine names are
+# carried for the plugin's cross-core window: cores since the PTC
+# consolidation ship `workflow-ptc` (the `workflow-worker-thread` row then
+# warns and no-ops), older rc-line cores ship `workflow-worker-thread` (the
+# `workflow-ptc` row no-ops the same way).
+- id: workflow-ptc
+  disabled: false
+- id: workflow-worker-thread
+  disabled: false
+
+- insert:
+    # The five-party alignment readiness scorer.
+    - id: tool-patent
+      name: '@deepseek-ai/dsh-tool-patent'
+
+    # Registers the shipped patent SKILL.md assets as runtime skills.
+    - id: patent-assets
+      name: '@mtl-academic/dsh-patent'
+
+    # The deterministic /patent-review command (fixed workflow script + versioned rubric).
+    - id: command-patent-review
+      name: '@deepseek-ai/dsh-command-patent-review'
+
+    # The Python MCP services (template parsing, project export, figure
+    # rendering, archive search). Two enable modes, both opt-in; with neither
+    # set the row stays disabled and visible in --dump-config:
+    # - DSH_PATENT_SERVICES_DIR: source checkout — `uv run --project <dir>`
+    #   runs the module straight from the working tree.
+    # - DSH_PATENT_SERVICES: installed wheel — `uvx` fetches the published
+    #   package (or resolves a locally built one) and runs its console script.
+    - id: mcp-patent-services
+      name: '@deepseek-ai/dsh-mcp-client'
+      disabled: !!js "process.env.DSH_PATENT_SERVICES_DIR === undefined && process.env.DSH_PATENT_SERVICES === undefined"
+      config:
+        serverName: patent
+        transport: stdio
+        command: !!js "process.env.DSH_PATENT_SERVICES_DIR ? 'uv' : 'uvx'"
+        # A scalar expression returning the array: the include's `!!js` dialect
+        # registers scalars only, not flow sequences.
+        args: !!js "process.env.DSH_PATENT_SERVICES_DIR ? ['run', '--project', process.env.DSH_PATENT_SERVICES_DIR, 'python', '-m', 'patent_services'] : ['--from', 'deepseek-harness-patent-services', 'patent-services']"

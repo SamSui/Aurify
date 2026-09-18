@@ -1,0 +1,111 @@
+/** `patent` namespace dictionaries for the two tool cards and the project dashboard tab. */
+
+// Type-only: the augmentation target.
+import type {} from '@deepseek-ai/dsh-client-ui-slots'
+
+declare module '@deepseek-ai/dsh-client-ui-slots' {
+  interface LocaleNamespaceMap {
+    /** Patent tool cards and the project dashboard tab copy. */
+    patent: PatentKey
+  }
+}
+
+/** Dictionary namespace owned by the patent client half. */
+export const NS = 'patent'
+
+/** Simplified Chinese dictionary (the key-set source of truth). */
+export const zh = {
+  'coverage.title': '五方对齐',
+  'coverage.running': '正在打分',
+  'coverage.failed': '调用失败',
+  'coverage.stopped': '已中止',
+  'coverage.ready': '就绪，可以动笔',
+  'coverage.notReady': '未就绪，继续访谈',
+  'coverage.alignment': '三方条数（背景/问题/效果）',
+  'coverage.aligned': '对齐',
+  'coverage.notAligned': '超出容差',
+  'coverage.raw': '模型可见结果',
+  'lint.title': '权利要求书体检',
+  'lint.running': '正在检查',
+  'lint.failed': '调用失败',
+  'lint.stopped': '已中止',
+  'lint.pass': '通过',
+  'lint.fail': '需修改',
+  'lint.total': '权项',
+  'lint.independent': '独立',
+  'lint.dependent': '从属',
+  'lint.errors': '错误',
+  'lint.warnings': '警告',
+  'lint.violations': '格式问题',
+  'lint.raw': '模型可见结果',
+  'panel.title': '专利项目面板',
+  'panel.guide': '当前会话工作区的项目总览：章节进度、审查报告与附图清单',
+  'panel.refresh': '刷新',
+  'panel.loading': '读取中',
+  'panel.unreadable': '无法读取工作区',
+  'panel.notProject': '当前工作区不是专利项目（缺少 patent.yml 或 chapters/）',
+  'panel.project': '项目',
+  'panel.brief': '五方对齐摘要（brief.md）',
+  'panel.application': '申请文件（application/）',
+  'panel.claims': '权利要求书',
+  'panel.description': '说明书',
+  'panel.abstract': '摘要',
+  'panel.chapters': '章节进度',
+  'panel.review': '审查报告（review/）',
+  'panel.figures': '附图（figures/）',
+  'review.title': '专利审查',
+  'review.running': '审查中',
+  'review.report': '报告：',
+  'review.raw': '原始输出',
+  'panel.empty': '暂无',
+} satisfies Record<string, string>
+
+/** The patent namespace key union. */
+export type PatentKey = keyof typeof zh
+
+/** English dictionary, checked complete against the zh key set. */
+export const en = {
+  'coverage.title': 'Five-party alignment',
+  'coverage.running': 'Scoring',
+  'coverage.failed': 'Call failed',
+  'coverage.stopped': 'Stopped',
+  'coverage.ready': 'Ready to draft',
+  'coverage.notReady': 'Not ready — keep asking',
+  'coverage.alignment': 'Point counts (background/problem/effect)',
+  'coverage.aligned': 'aligned',
+  'coverage.notAligned': 'out of tolerance',
+  'coverage.raw': 'Model-visible result',
+  'lint.title': 'Claims lint',
+  'lint.running': 'Checking',
+  'lint.failed': 'Call failed',
+  'lint.stopped': 'Stopped',
+  'lint.pass': 'Pass',
+  'lint.fail': 'Needs fixes',
+  'lint.total': 'claims',
+  'lint.independent': 'independent',
+  'lint.dependent': 'dependent',
+  'lint.errors': 'errors',
+  'lint.warnings': 'warnings',
+  'lint.violations': 'Format findings',
+  'lint.raw': 'Model-visible result',
+  'panel.title': 'Patent project',
+  'panel.guide': 'Overview of the current session workspace: chapter progress, review reports, and figure sources',
+  'panel.refresh': 'Refresh',
+  'panel.loading': 'Loading',
+  'panel.unreadable': 'The workspace could not be read',
+  'panel.notProject': 'This workspace is not a patent project (no patent.yml or chapters/)',
+  'panel.project': 'Project',
+  'panel.brief': 'Five-party brief (brief.md)',
+  'panel.application': 'Application documents (application/)',
+  'panel.claims': 'Claims',
+  'panel.description': 'Description',
+  'panel.abstract': 'Abstract',
+  'panel.chapters': 'Chapter progress',
+  'panel.review': 'Review reports (review/)',
+  'panel.figures': 'Figures (figures/)',
+  'review.title': 'Patent review',
+  'review.running': 'reviewing',
+  'review.report': 'Report:',
+  'review.raw': 'raw output',
+  'panel.empty': 'None yet',
+} satisfies Record<PatentKey, string>
