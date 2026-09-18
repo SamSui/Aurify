@@ -1,5 +1,5 @@
 ---
-description: "两个确定性专利工具：交底书 brief 的五方对齐就绪度打分，与已起草权利要求书的 CNIPA 格式静态检查。"
+description: "确定性专利工具面：交底书 brief 的五方对齐就绪度打分、权利要求书的 CNIPA 格式静态检查，以及把项目从任意阶段推进到导出成稿的 patent-loop 状态评估。"
 kind: "package-reference"
 ---
 
@@ -9,13 +9,14 @@ kind: "package-reference"
 
 ## 概述
 
-两个模型可见的确定性专利工具。`patent_brief_coverage` 按五方对齐就绪判据为交底书 brief 打分，给 Init 对话一个确定性的「何时停止提问、开始动笔」信号；`patent_claims_lint` 按中国专利申请（CNIPA）格式最低要求对起草的权利要求书（及可选的摘要）做静态检查。两者都是参数的纯函数，不带任何配置，在 patent profile 内使用。
+模型可见的确定性专利工具面。`patent_brief_coverage` 按五方对齐就绪判据为交底书 brief 打分，给 Init 对话一个确定性的「何时停止提问、开始动笔」信号；`patent_claims_lint` 按中国专利申请（CNIPA）格式最低要求对起草的权利要求书（及可选的摘要）做静态检查；`patent_loop` 从任意流水线阶段评估项目目录并指认下一个阶段，配套的 `/patent-loop` 命令把评估结果注入会话做全流程推进。在 patent profile 内使用；两个纯函数工具不带任何配置，loop 工具对读盘项目状态做判定。
 
 ## 目录
 
 - [做什么](#what-it-does)
 - [打分语义](#scoring-semantics)
 - [权利要求检查语义](#claims-lint-semantics)
+- [循环语义](#loop-semantics)
 - [渲染](#rendering)
 - [导出形态](#export-shape)
 - [Model Experience](#model-experience)
@@ -25,7 +26,7 @@ kind: "package-reference"
 <a id="what-it-does"></a>
 ## 做什么
 
-在 `ctx.tools` 上注册两个工具。`patent_brief_coverage`：模型按维度传入已收集的草稿内容——`field`、`background`、`problem`、`solution`、`effect` 五个核心维度，外加 `name`、`drawings`、`key_points` 三个边缘维度（省略即未收集）——返回已收集/缺失清单、三方对齐判定与就绪信号。`patent_claims_lint`：模型传入起草的权利要求书文本（及可选摘要），返回权项数量结构与规则违例。两个工具都是参数的纯函数；调用与结果经 loop 的 `tool/call` 与 `tool/result` session 事件记录，不追加任何其他事件。
+在 `ctx.tools` 上注册三个工具、在 `ctx.commands` 上注册一个命令。`patent_brief_coverage`：模型按维度传入已收集的草稿内容——`field`、`background`、`problem`、`solution`、`effect` 五个核心维度，外加 `name`、`drawings`、`key_points` 三个边缘维度（省略即未收集）——返回已收集/缺失清单、三方对齐判定与就绪信号。`patent_claims_lint`：模型传入起草的权利要求书文本（及可选摘要），返回权项数量结构与规则违例。两个纯函数工具的调用与结果经 loop 的 `tool/call` 与 `tool/result` session 事件记录，不追加任何其他事件。`patent_loop` 与 `/patent-loop` 共用一个读盘评估器（见[循环语义](#loop-semantics)）。
 
 <a id="scoring-semantics"></a>
 ## 打分语义
@@ -52,6 +53,11 @@ kind: "package-reference"
 
 解析出的权项刻意不进入模型可见结果：模型刚提交过全文，回显每条权项只是白白消耗 token。
 
+<a id="loop-semantics"></a>
+## 循环语义
+
+`patent_loop` 只读磁盘事实，返回第一个未完成的流水线阶段——init（无 `patent.yml`）→ align（brief.md 缺失或核心维度章节缺失）→ chapters（八章任一缺失或占位）→ experiments（效果章含量化数据但无运行记录、也无「无需实验」声明）→ figures（08 章声明与 figures/ 根成品双向对账）→ review（review/ 无 `*.review.md`）→ export（exports/ 无交底书 docx，或导出物早于源文件）——并给出当前阶段的 directive：加载哪些技能、遵守哪些纪律。`complete=true` 要求全部关卡通过；它是「成稿」的唯一权威，工具描述与 patent-loop skill 要求模型每完成一阶段就回来复检，而不是自行宣布项目完成。两个磁盘逃生口防止合法项目卡死循环：`experiments/README.md` 声明无需实验、08-drawings.md 标注无附图。`/patent-loop` 命令先评估，再经 `agent.followup()` 把循环契约作为持久用户面输入注入会话，返回仅 UI 可见的摘要——命令结果不进模型历史；需要用户的阶段（方向拍板、访谈问答）以问题收尾等用户回答。
+
 <a id="rendering"></a>
 ## 渲染
 
@@ -60,7 +66,7 @@ kind: "package-reference"
 <a id="export-shape"></a>
 ## 导出形态
 
-函数插件：只导出 `name` / `inject` / `apply`，禁止 default export。多余的 `export default` 会被 Loader 的 `unwrapExports` 折叠模块并丢掉 `inject`（见 [docs/postmortem/0001](../../../docs/postmortem/0001-acp-default-export-drops-inject.zh.md)）。
+函数插件：只导出 `name` / `inject` / `apply`，禁止 default export。多余的 `export default` 会被 Loader 的 `unwrapExports` 折叠模块并丢掉 `inject`（见 [docs/postmortem/0001](../../../docs/postmortem/0001-acp-default-export-drops-inject.zh.md)）。`inject` 为 `['tools', 'commands']`——命令注册与工具同插件。
 
 <a id="model-experience"></a>
 ## Model Experience
@@ -97,7 +103,8 @@ kind: "package-reference"
 ## Known Limitations and Deferred Work
 
 - **工具只对传入内容打分**——维度内容由模型从其上下文提供；模型可能提交删减版 brief 而得到误导性 `ready`。`patent-init` skill 的程序约束这一点，审查引擎会对落盘文件复查。
-- **不支持路径输入**——工具接收文本而非 `brief.md` 路径；读文件先经 `fs` 工具完成，本包因此不沾文件系统策略。
+- **不支持路径输入**——两个纯函数工具接收文本而非 `brief.md` 路径；读文件先经 `fs` 工具完成，本包因此不沾文件系统策略（loop 工具对是刻意的例外：它自己读项目状态，判定才不会被模型提交的内容左右）。
+- **循环的 brief 与效果章启发式只判存在性**——标题下有非空正文即过 align，效果章出现任一「数字+单位」即触发 experiments 关卡；内容单薄与数字无据是各技能与审查引擎的职责，不是评估器的。
 
 <a id="dev-note"></a>
 ### 开发备注
@@ -105,6 +112,6 @@ kind: "package-reference"
 <details>
 <summary>维护者的工作上下文——点击展开</summary>
 
-打分器移植自天工的 `brief_dimensions.py`；容差与启发式计数是移植资产语义，不是部署可调项。检查规则对齐 CNIPA 法定格式最低要求（C1-C5、A1），不是实质审查。
+打分器移植自天工的 `brief_dimensions.py`；容差与启发式计数是移植资产语义，不是部署可调项。检查规则对齐 CNIPA 法定格式最低要求（C1-C5、A1），不是实质审查。循环评估器刻意只信磁盘产物——对话里怎么说都不算，产物缺失的阶段保持未完成；所有逃生口本身也是磁盘文件。
 
 </details>

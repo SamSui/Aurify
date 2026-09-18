@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
+import Commands from '@deepseek-ai/dsh-commands'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import { ALL_DIMENSIONS } from '../src/coverage.ts'
@@ -8,6 +9,7 @@ import * as ToolPatent from '../src/index.ts'
 async function mount(): Promise<Context> {
   const ctx = new Context()
   await ctx.plugin(SystemPrompt)
+  await ctx.plugin(Commands)
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(ToolPatent)
   return ctx

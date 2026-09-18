@@ -1,23 +1,33 @@
 /**
  * Model-facing deterministic patent tools: the five-party alignment coverage
- * scorer that gates the Init dialogue, and the claims-and-abstract linter for
- * application drafting. Both are pure functions of their arguments. Named
- * exports preserve loader injection metadata.
+ * scorer that gates the Init dialogue, the claims-and-abstract linter for
+ * application drafting, and the patent-loop state assessor that drives a
+ * project from any stage to the exported disclosure. The coverage and lint
+ * tools are pure functions of their arguments; the loop tool and the
+ * `/patent-loop` command read project state from disk and share one
+ * assessor, so the completion verdict never depends on the model's own
+ * claim of being done. Named exports preserve loader injection metadata.
  * @module @deepseek-ai/dsh-tool-patent
  */
 
+import { resolve } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
+import { createUserMessage } from '@deepseek-ai/dsh-llm'
+import type { CommandInvocation, CommandResult } from '@deepseek-ai/dsh-commands'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { ALL_DIMENSIONS, ALIGN_TOLERANCE, computeCoverage, DIMENSION_TITLES, type DimensionOutline } from './coverage.ts'
 import { ABSTRACT_MAX_CHARS, lintClaims } from './claims-lint.ts'
+import { assessLoopState, type LoopState } from './loop.ts'
 
 export { computeCoverage } from './coverage.ts'
 export type { Coverage, DimensionOutline } from './coverage.ts'
 export { lintClaims, parseClaims, countAbstractChars, ABSTRACT_MAX_CHARS } from './claims-lint.ts'
 export type { ClaimsLintResult, ParsedClaim, ClaimViolation } from './claims-lint.ts'
+export { assessLoopState } from './loop.ts'
+export type { LoopGap, LoopStage, LoopState } from './loop.ts'
 
 export const name = 'tool-patent'
-export const inject = ['tools']
+export const inject = ['tools', 'commands']
 
 const DIMENSION_DESCRIPTIONS: Readonly<Record<(typeof ALL_DIMENSIONS)[number], string>> = {
   name: 'Proposed invention name (invention name).',
@@ -74,9 +84,47 @@ function renderClaimsLint(value: { summary: ReturnType<typeof lintClaims>['summa
 }
 
 /**
- * Register the `patent_brief_coverage` and `patent_claims_lint` tools on
- * `ctx.tools`.
- * @param ctx - registrant context carrying the tool registry.
+ * Compose the loop prompt the `/patent-loop` command injects into the
+ * session: the assessor's stage verdict plus the loop contract — execute the
+ * stage per its skills, re-check with the tool after every stage, and never
+ * declare the project final without the assessor's `complete` verdict.
+ * @param state - the current assessment.
+ * @returns the user-plane prompt text.
+ */
+function loopPrompt(state: LoopState): string {
+  const gapLines = state.gaps.map(gap => `- [${gap.stage}] ${gap.detail}`).join('\n')
+  return `【patent-loop 全流程推进】项目：${state.projectName}（${state.projectRoot}）\n`
+    + `当前阶段：${state.stage}${state.mayNeedUser ? '（本阶段需要用户输入）' : ''}\n`
+    + `待办清单：\n${gapLines.length > 0 ? gapLines : '- 无——项目已成稿'}\n\n`
+    + `本阶段指令：${state.directive}\n\n`
+    + '循环契约（必须遵守）：\n'
+    + `1. 先加载本阶段指定的技能（${state.skills.length > 0 ? state.skills.join('、') : '无需技能'}）再动手，严格按技能的目录与纪律执行：附图渲染后必须派 subagent 验收合格才保留；正式实验数据必须出自 run_experiment 工具；导出一律走 patent-services 的 MCP 工具，禁止手拼 docx。\n`
+    + '2. 每完成一个阶段就再次调用 patent_loop 工具核验；只有它返回 complete=true 才算完成，禁止凭感觉宣布成稿。\n'
+    + '3. 需要用户输入时（方向拍板、访谈问答、复述确认），把问题抛给用户并结束本轮；用户回答后继续推进，用户也可随时再发 /patent-loop 恢复。\n'
+    + '4. 工具或网络不可用时如实说明并给启用方法，不静默降级、不编造。'
+}
+
+/**
+ * Compose the loop tool's model-facing render text: the stage verdict plus
+ * the directive, with the re-check contract spelled out once. The input is
+ * the tool's own projection (gap strings), not the full LoopState.
+ * @param value - the execute projection returned by the tool.
+ * @returns the render text block.
+ */
+function renderLoop(value: { complete: boolean; projectName: string; stage: string; directive: string; gaps: string[] }): { type: 'text'; text: string }[] {
+  const head = value.complete
+    ? `LOOP COMPLETE: ${value.projectName} 已成稿（导出物、附图、审查报告全部就位）。`
+    : `LOOP STAGE [${value.stage}]: ${value.gaps[0] ?? ''}`
+  const tail = value.complete
+    ? '交付导出物路径与要点摘要即可，不要再循环。'
+    : '按指令完成后再次调用 patent_loop 核验，直到返回 LOOP COMPLETE。'
+  return [{ type: 'text', text: `${head}\n${value.directive}\n${tail}` }]
+}
+
+/**
+ * Register the `patent_brief_coverage` and `patent_claims_lint` tools, the
+ * `patent_loop` assessor tool, and the `/patent-loop` command on `ctx`.
+ * @param ctx - registrant context carrying the tool and command registries.
  */
 export function apply(ctx: Context): void {
   ctx.tools.register(defineTool({
@@ -197,4 +245,97 @@ export function apply(ctx: Context): void {
     },
     presentCall: args => ({ card: 'generic', title: 'Lint claims', kind: 'other', rawInput: { claims: '…', abstract: args.abstract } }),
   }))
+
+  ctx.tools.register(defineTool({
+    name: 'patent_loop',
+    description: 'Assess a patent project from any stage and name the one next pipeline stage '
+      + '(init → align → chapters → experiments → figures → review → export) with its directive. '
+      + 'Every verdict is read from disk facts — manifest, brief, chapters, the experiment run log, '
+      + 'figure files against the drawings chapter, review reports, and the exported disclosure docx — '
+      + 'never from the conversation, so this is the only authority on whether the project is 成稿. '
+      + 'Use it to start or resume a full-pipeline push ("loop", "继续推进", "帮我完成"), and call it '
+      + 'again after finishing each stage; only its complete=true verdict ends the loop.',
+    parameters: {
+      project_dir: {
+        type: 'string',
+        description: 'The patent project directory. Defaults to the working directory; pass the '
+          + 'project folder when the session sits above it.',
+      },
+    },
+    output: {
+      schema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          stage: { type: 'string', required: true },
+          complete: { type: 'boolean', required: true },
+          projectName: { type: 'string', required: true },
+          projectRoot: { type: 'string', required: true },
+          mayNeedUser: { type: 'boolean', required: true },
+          skills: { type: 'array', required: true, items: { type: 'string' } },
+          directive: { type: 'string', required: true },
+          gaps: { type: 'array', required: true, items: { type: 'string' } },
+        },
+      },
+      render: (_args, value) => renderLoop(value),
+      presentationMeta: (_args, value) => value,
+    },
+    async execute(args, exec) {
+      const root = args.project_dir ?? exec.agent?.session.header.cwd
+      if (root === undefined) {
+        return {
+          stage: 'init',
+          complete: false,
+          projectName: '',
+          projectRoot: '',
+          mayNeedUser: false,
+          skills: [],
+          directive: '无法定位项目目录：会话未携带工作目录，请用 project_dir 参数显式指定。',
+          gaps: ['无法定位项目目录'],
+        }
+      }
+      const state = await assessLoopState(resolve(root))
+      return {
+        stage: state.stage,
+        complete: state.complete,
+        projectName: state.projectName,
+        projectRoot: state.projectRoot,
+        mayNeedUser: state.mayNeedUser,
+        skills: state.skills,
+        directive: state.directive,
+        gaps: state.gaps.map(gap => `[${gap.stage}] ${gap.detail}`),
+      }
+    },
+    presentCall: args => ({ card: 'generic', title: 'Patent loop', kind: 'other', rawInput: args }),
+  }))
+
+  // The command is a trigger, not an executor: it assesses the project and
+  // injects the loop prompt as a durable user-plane input, so the work runs
+  // in the model's hands with full tool access while the assessor keeps the
+  // completion verdict. The CommandResult stays UI-only.
+  const handler = async (invocation: CommandInvocation): Promise<CommandResult> => {
+    const cwd = invocation.agent.session.header.cwd
+    if (cwd === undefined) return { kind: 'error', text: '无法确定项目目录：会话未携带工作目录，请先 cd 到项目目录或指定目标。' }
+    const raw = invocation.rawInput.trim()
+    const root = resolve(cwd, raw.length > 0 ? raw : '.')
+    const state = await assessLoopState(root)
+    if (!state.complete) {
+      invocation.agent.followup(createUserMessage({
+        content: [{ type: 'text', text: loopPrompt(state) }],
+        source: { kind: 'user' },
+      }))
+    }
+    const head = state.complete
+      ? `项目已成稿（${state.projectName}）：交底书导出物、附图、审查报告全部就位，无需循环。`
+      : `patent-loop 已启动：${state.projectName} — 当前阶段 ${state.stage}（${state.gaps[0]?.detail ?? ''}）；推进指令已注入会话，模型完成后会自动核验下一阶段。`
+    const roadmap = state.gaps.map(gap => `[${gap.stage}] ${gap.detail}`).join('；')
+    return { kind: 'success', text: roadmap.length > 0 ? `${head}\n待办：${roadmap}` : head }
+  }
+  ctx.effect(function* () {
+    yield ctx.commands.register({
+      name: 'patent-loop',
+      description: '从任何阶段把专利项目推进到成稿交底书（评估当前阶段→注入推进指令→循环直到 complete）',
+      handler,
+    })
+  }, 'tool-patent loop command')
 }

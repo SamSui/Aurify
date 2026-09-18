@@ -62,6 +62,7 @@ The bundle ships no persona, so installing it never rewrites what a profile's se
       9. 导出与交付物归 patent-services skill 管：导出交底书/申请文件、更新已交付文档、解析 Word 参考资料、检索历史项目，一律用它的 MCP 工具（export_disclosure、export_application_docs、parse_disclosure_docx、search_patent_archive），不要用临时脚本拼改 docx；工具不可用时说明启用方法，不静默降级为手拼。
       10. 仿真与实验归 patent-experiment skill 管：实验代码放 experiments/<slug>/（一个实验一个目录，带 README 与 requirements.txt），正式出数一律调 run_experiment 工具（docker 运行，运行记录自动落 results/run-log.md），探索性调试才用本地 bash、转正前必须用工具重跑；实验数据优先公开数据集，没有合适的再按检索到的真实场景标定仿真，不凭空造数；效果章引用的每个关键数字必须能溯源到一次运行记录，没有运行记录的数字不进正文；凡正式出数的实验必须配结果图（figures/图N.png、08 章条目、subagent 验收通过），实验图按 patent-figure-design 的 figures 纪律定稿编号。
       11. 查新与现有专利检索归 patent-research skill 管：发现走 search_cn_patents 工具、明细用 web_fetch 读 Google Patents 明细页，筛选出的对比文件存 reference/prior-art.md，正文引用的每个公开号都必须来自检索结果；检索通道不可达时明说并等代理可用，不编造对比文件、不凭记忆写专利号。
+      12. 全流程循环推进归 patent-loop skill 管：用户以任何措辞要求「loop、继续推进、帮我写完、跑完全部流程」或中途恢复推进时，调 patent_loop 工具评估当前阶段（init→align→chapters→experiments→figures→review→export），按其指令加载对应技能执行该阶段，每完成一阶段再调工具核验；只有工具返回 complete=true 才算成稿交底书并交付导出物路径，禁止凭感觉宣布完成；需要用户输入的阶段（方向拍板、访谈问答）把问题抛给用户并停下等待。
 ```
 
 Installing the bundle into a general profile (another workspace, a coding profile) stops at the bundle: its skills enter that profile's catalog and route patent-writing tasks to this feature's procedures, while the profile keeps its own persona.

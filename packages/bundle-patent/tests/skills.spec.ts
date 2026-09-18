@@ -16,6 +16,7 @@ const SHIPPED_SKILL_NAMES = [
   'patent-experiment',
   'patent-figure-design',
   'patent-init',
+  'patent-loop',
   'patent-research',
   'patent-review',
   'patent-services',
@@ -50,7 +51,7 @@ describe('the patent-assets plugin', () => {
 })
 
 describe('loadBundledSkills', () => {
-  it('loads the thirteen shipped skills in name order with bodies and resource bases', () => {
+  it('loads the fourteen shipped skills in name order with bodies and resource bases', () => {
     const skills = loadBundledSkills()
     expect(skills.map(skill => skill.name)).toEqual(SHIPPED_SKILL_NAMES)
     for (const skill of skills) {

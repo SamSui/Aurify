@@ -1,5 +1,5 @@
 ---
-description: "Two deterministic patent tools: five-party alignment readiness scoring for a disclosure brief, and CNIPA format linting for drafted claims."
+description: "Deterministic patent surfaces: five-party alignment readiness scoring, CNIPA claims linting, and the patent-loop state assessor that drives a project from any stage to the exported disclosure."
 kind: "package-reference"
 ---
 
@@ -9,13 +9,14 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Two model-facing deterministic patent tools. `patent_brief_coverage` scores a disclosure brief against the five-party alignment (五方对齐) readiness criteria so the Init dialogue has a deterministic stop signal; `patent_claims_lint` lints a drafted application's claims (and optional abstract) against the CNIPA format minimums. Choose them inside the patent profile; both are pure functions of their arguments and carry no configuration.
+Model-facing deterministic patent surfaces. `patent_brief_coverage` scores a disclosure brief against the five-party alignment (五方对齐) readiness criteria so the Init dialogue has a deterministic stop signal; `patent_claims_lint` lints a drafted application's claims (and optional abstract) against the CNIPA format minimums; `patent_loop` assesses a project directory from any pipeline stage and names the one next stage, and the `/patent-loop` command injects that assessment into the session as a full-pipeline push. Choose them inside the patent profile; the two pure tools carry no configuration, and the loop pair reads project state from disk.
 
 ## Table of Contents
 
 - [What it does](#what-it-does)
 - [Scoring semantics](#scoring-semantics)
 - [Claims lint semantics](#claims-lint-semantics)
+- [Loop semantics](#loop-semantics)
 - [Rendering](#rendering)
 - [Export shape](#export-shape)
 - [Model Experience](#model-experience)
@@ -24,7 +25,7 @@ Two model-facing deterministic patent tools. `patent_brief_coverage` scores a di
 
 ## What it does
 
-Registers two tools on `ctx.tools`. For `patent_brief_coverage` the model sends the draft content collected so far per dimension — `field`, `background`, `problem`, `solution`, `effect`, plus the edge dimensions `name`, `drawings`, `key_points` (omitted keys mean uncollected) — and receives the collected/missing split, the three-way alignment verdict, and the readiness signal. For `patent_claims_lint` the model sends the drafted claims text (and the optional abstract) and receives the claim count split and the rule violations. Both tools are pure functions of their arguments; calls and results ride the loop's `tool/call` and `tool/result` session events, and nothing else is appended.
+Registers three tools on `ctx.tools` and one command on `ctx.commands`. For `patent_brief_coverage` the model sends the draft content collected so far per dimension — `field`, `background`, `problem`, `solution`, `effect`, plus the edge dimensions `name`, `drawings`, `key_points` (omitted keys mean uncollected) — and receives the collected/missing split, the three-way alignment verdict, and the readiness signal. For `patent_claims_lint` the model sends the drafted claims text (and the optional abstract) and receives the claim count split and the rule violations. The coverage and lint tools are pure functions of their arguments; calls and results ride the loop's `tool/call` and `tool/result` session events, and nothing else is appended. `patent_loop` and `/patent-loop` share one disk-reading assessor (see [Loop semantics](#loop-semantics)).
 
 ## Scoring semantics
 
@@ -49,13 +50,17 @@ The tolerance and the heuristic count are ported asset semantics (init-stage inf
 
 The parsed claims are deliberately excluded from the model-visible result: the model just supplied the text, so echoing every claim back spends tokens for nothing.
 
+## Loop semantics
+
+`patent_loop` reads only disk facts and returns the first incomplete pipeline stage — init (no `patent.yml`) → align (brief.md missing or a core dimension section absent) → chapters (any of the eight files missing or a placeholder) → experiments (a quantified effect chapter with no run log and no "not applicable" declaration) → figures (the 08-drawings declarations versus the figure files at the figures root, both directions) → review (no `*.review.md` in review/) → export (no disclosure docx in exports/, or one older than its sources) — plus a per-stage directive naming the skills to load and the disciplines that stage's skills enforce. `complete=true` requires every gate to pass; it is the authority on 成稿, and the tool description and the `patent-loop` skill tell the model to re-check after every stage instead of declaring the project final itself. Two disk escape hatches keep a legitimate project from deadlocking the loop: `experiments/README.md` declaring 无需实验, and 无附图 noted in 08-drawings.md. The `/patent-loop` command assesses, injects the loop contract into the session as a durable user-plane input through `agent.followup()`, and returns a UI-only summary — the command result never enters model history, and stages needing the user (direction sign-off, interview answers) end the turn with questions on the table.
+
 ## Rendering
 
 The canonical result is `{ covered, missing, ready, coreFilled: { done, total }, aligned, alignmentCounts }`; its Native renderer returns one text block naming the missing dimensions with their Chinese chapter titles, the alignment counts with the tolerance verdict, and the ready/not-ready verdict with the next action.
 
 ## Export shape
 
-A function plugin: it exports `name` / `inject` / `apply` and NO default. A stray `export default` would collapse the module via the Loader's `unwrapExports` and drop `inject` (see [docs/postmortem/0001](../../../docs/postmortem/0001-acp-default-export-drops-inject.md)).
+A function plugin: it exports `name` / `inject` / `apply` and NO default. A stray `export default` would collapse the module via the Loader's `unwrapExports` and drop `inject` (see [docs/postmortem/0001](../../../docs/postmortem/0001-acp-default-export-drops-inject.md)). `inject` is `['tools', 'commands']` — the command registration rides the same plugin as the tools.
 
 ## Model Experience
 
@@ -90,7 +95,8 @@ Append-only; newly visible content follows the reusable request prefix.
 ## Known Limitations and Deferred Work
 
 - **The tool scores what it is given** — the model supplies the dimension contents from its context; it could submit a trimmed brief and receive a misleading `ready`. The `patent-init` skill procedure constrains this, and the review engine re-checks the written files.
-- **No path-based input** — the tool takes text, not a `brief.md` path; reading the file first through the `fs` tools is the model's job, keeping this package free of filesystem policy.
+- **No path-based input** — the coverage and lint tools take text, not a `brief.md` path; reading the file first through the `fs` tools is the model's job, keeping this package free of filesystem policy (the loop pair is the deliberate exception: it reads project state itself so its verdict cannot be gamed by what the model submits).
+- **The loop's brief and effect heuristics are presence checks** — a heading with a non-empty body passes align, and any number-plus-unit in the effect chapter triggers the experiments gate; thin content and unbacked numbers are the skills' and the review engine's job, not the assessor's.
 
 <a id="dev-note"></a>
 ### Dev Note
@@ -98,6 +104,6 @@ Append-only; newly visible content follows the reusable request prefix.
 <details>
 <summary>Working context for maintainers — click to expand</summary>
 
-The scorer is a port of TianGong's `brief_dimensions.py`; the tolerance and the heuristic enumeration count are ported asset semantics, not deployment tunables. The lint rules track CNIPA statutory format minimums (C1-C5, A1), not substantive examination.
+The scorer is a port of TianGong's `brief_dimensions.py`; the tolerance and the heuristic enumeration count are ported asset semantics, not deployment tunables. The lint rules track CNIPA statutory format minimums (C1-C5, A1), not substantive examination. The loop assessor deliberately trusts only disk artifacts — a stage whose artifacts are missing stays pending no matter what the conversation claims — and every escape hatch is itself a disk file.
 
 </details>

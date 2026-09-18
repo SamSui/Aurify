@@ -18,6 +18,12 @@
       "path": "../../core/tools"
     },
     {
+      "path": "../../interaction/commands"
+    },
+    {
+      "path": "../../llm/llm"
+    },
+    {
       "path": "../../runtime-diagnostics/invariants"
     }
   ]
