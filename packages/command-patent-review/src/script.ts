@@ -17,8 +17,19 @@
  */
 
 export const REVIEW_SCRIPT = String.raw`
-const { fileLabel, fileContent, dimensions, passes, consistency } = args
+const { fileLabel, fileContent, dimensions, passes, consistency, reviewerTemperature } = args
 phase('Patent review: ' + fileLabel)
+
+// Older workflow engines reject the temperature option before spawning any
+// child; degrade to the provider default so the review still runs.
+async function scoredAgent(prompt, opts) {
+  try {
+    return await agent(prompt, { ...opts, temperature: reviewerTemperature })
+  } catch (error) {
+    if (String(error && error.message).includes('temperature')) return agent(prompt, opts)
+    throw error
+  }
+}
 const SCORE_SCHEMA = {
   type: 'object',
   additionalProperties: false,
@@ -63,7 +74,7 @@ for (const dimension of dimensions) {
     tasks.push(async () => ({
       dimension,
       pass,
-      result: await agent(promptFor(dimension, pass), { schema: SCORE_SCHEMA, label: 'review:' + dimension.key + '#' + (pass + 1) }),
+      result: await scoredAgent(promptFor(dimension, pass), { schema: SCORE_SCHEMA, label: 'review:' + dimension.key + '#' + (pass + 1) }),
     }))
   }
 }
@@ -111,7 +122,7 @@ if (consistency !== undefined) {
     for (const kind of ['support', 'terminology']) {
       tasks.push(async () => ({
         kind,
-        result: await agent(consistencyPrompt(kind, pass), { schema: CONSISTENCY_SCHEMA, label: 'consistency:' + kind + '#' + (pass + 1) }),
+        result: await scoredAgent(consistencyPrompt(kind, pass), { schema: CONSISTENCY_SCHEMA, label: 'consistency:' + kind + '#' + (pass + 1) }),
       }))
     }
   }
@@ -148,7 +159,7 @@ for (const foldedDimension of folded) {
     retryThunks.push(async () => ({
       dimension,
       pass,
-      result: await agent(promptFor(dimension, pass), { schema: SCORE_SCHEMA, label: 'review:' + dimension.key + '#retry' + (retryIndex + 1) }),
+      result: await scoredAgent(promptFor(dimension, pass), { schema: SCORE_SCHEMA, label: 'review:' + dimension.key + '#retry' + (retryIndex + 1) }),
     }))
   }
 }

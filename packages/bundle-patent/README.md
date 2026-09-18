@@ -16,6 +16,7 @@ A personal invention-disclosure drafting layer over [`dsh-base`](../base/README.
 ## Table of Contents
 
 - [Use this package](#use-this-package)
+- [The discussion sampling default](#the-discussion-sampling-default)
 - [The MCP services row](#the-mcp-services-row)
 - [Skills delivery](#skills-delivery)
 - [Model Experience](#model-experience)
@@ -70,6 +71,10 @@ Installing the bundle into a general profile (another workspace, a coding profil
 -----
 
 <a id="the-mcp-services-row"></a>
+## The discussion sampling default
+
+The asset carrier pins a 0.7 sampling temperature on the profile's top-level sessions: drafting a disclosure is creative conversation, and near-deterministic sampling reads flatter than it should. Delegated children carry the durable subagent origin and are skipped, so the review chain's own scoring temperature (0.2 — see the review command's README) and every user-spawned subagent stay untouched. On cores whose request payloads predate the subject injection the override stays off entirely rather than guessing.
+
 ## The MCP services row
 
 The patch inserts the [`dsh-mcp-client`](../../mcp/mcp-client/README.md) row for the [`patent-services`](../../../python/patent-services/README.md) stdio server (`serverName: patent` — `parse_disclosure_docx`, `export_disclosure`, `export_application_docs`, `render_drawio_figure`, `render_html_figure`, `search_patent_archive`, `run_experiment`, and `search_cn_patents`). Two opt-in modes, both off by default so the row stays disabled (visible in `--dump-config`, absent from the tool table): set `DSH_PATENT_SERVICES` to run the installed package through `uvx` (the published wheel, or a locally built one via `uv build` + `uv tool install`); or set `DSH_PATENT_SERVICES_DIR` to a source checkout, which runs the module straight from that directory. Either way the model gains the parsing, export, rendering, search, experiment, and patent-discovery tools at the next boot.

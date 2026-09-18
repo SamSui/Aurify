@@ -37,6 +37,8 @@ Determinism claim: the same input file and the same collected scores render the 
 
 `scoringPasses` (integer 1-5, default 2): independent scoring passes per dimension. Two gives a self-consistency signal at twice the child count; one is the cheap mode.
 
+`reviewTemperature` (number 0-2, default 0.2): the sampling temperature pinned on every scoring child's requests through the workflow's per-child temperature override. Scoring is a mechanical rubric application, so the default sits near deterministic; engines whose `agent()` predates the temperature option are detected at call time and the child degrades to the provider default instead of failing.
+
 `projectRoot` (optional string): the base for relative review targets. Unset resolves each invocation against the receiving agent's session cwd — the workspace a web composition created the session in. Set it explicitly only when the fs world differs from that session workspace (e.g. a composed `fs-local` cwd); an invocation with neither a configured root nor a session cwd fails loud instead of reviewing against the wrong directory.
 
 Report placement anchors to the file-first project model: after the target resolves, the nearest ancestor directory holding `patent.yml` owns the `review/` folder, so a target like `<project>/chapters/03-background.md` reports into `<project>/review/` even when the working directory is the workspace above it; without an enclosing `patent.yml` the report lands under `projectRoot/review/` as before.

@@ -83,6 +83,13 @@ export interface Config {
    */
   scoringPasses: number
   /**
+   * Sampling temperature pinned on every scoring child's requests. Scoring is
+   * a mechanical rubric application, so the default sits near deterministic;
+   * raise it only when the rubric should reward wording variety (it should
+   * not). Validated to the provider-agnostic 0-2 range.
+   */
+  reviewTemperature: number
+  /**
    * The patent project root: the base for relative review targets. Unset
    * resolves each invocation against the receiving agent's session cwd (the
    * workspace a web composition created the session in); set it explicitly
@@ -97,6 +104,7 @@ export interface Config {
 export const Config: z<Config> = z.object({
   // `natural()` is schemastery's integer primitive (number().step(1).min(0)).
   scoringPasses: z.natural().min(1).max(5).default(2),
+  reviewTemperature: z.number().min(0).max(2).default(0.2),
   projectRoot: z.string(),
 })
 
@@ -232,6 +240,7 @@ async function executeReview(
       fileContent: file.content,
       dimensions: rubric.dimensions,
       passes: config.scoringPasses,
+      reviewerTemperature: config.reviewTemperature,
       ...consistency === undefined ? {} : { consistency },
     },
     parent: invocation.agent,

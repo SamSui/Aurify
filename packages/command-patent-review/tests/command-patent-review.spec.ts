@@ -11,8 +11,8 @@ let root: string
  * Build the mount config: explicit-undefined `projectRoot` test overrides must
  * end absent (exactOptionalPropertyTypes), not present-as-undefined.
  */
-function buildConfig(overrides: { scoringPasses?: number; projectRoot?: string | undefined }): Config {
-  const { projectRoot, ...rest } = { scoringPasses: 2, projectRoot: root, ...overrides }
+function buildConfig(overrides: { scoringPasses?: number; reviewTemperature?: number; projectRoot?: string | undefined }): Config {
+  const { projectRoot, ...rest } = { scoringPasses: 2, reviewTemperature: 0.2, projectRoot: root, ...overrides }
   return projectRoot === undefined ? rest : { ...rest, projectRoot }
 }
 
@@ -35,23 +35,28 @@ type AgentStub = { session: { header: { cwd?: string } } }
 
 function mount(
   engineResult: { stopReason: string; value?: unknown; error?: string },
-  overrides: { scoringPasses?: number; projectRoot?: string | undefined } = {},
+  overrides: { scoringPasses?: number; reviewTemperature?: number; projectRoot?: string | undefined } = {},
 ): {
   handler: (rawInput: string, agent?: AgentStub) => Promise<{ kind: string; text?: string }>
   tool: { execute: (args: unknown, exec: unknown) => Promise<{ kind: 'success' | 'error'; summary: string; report: string; overall?: number }> } | undefined
   start: ReturnType<typeof vi.fn>
+  startedArgsContainer: { args: Record<string, unknown> }
   steps: unknown[]
 } {
   let handler!: (invocation: { rawInput: string; agent?: AgentStub }) => Promise<{ kind: string; text?: string }>
   let tool: { execute: (args: unknown, exec: unknown) => Promise<{ kind: 'success' | 'error'; summary: string; report: string; overall?: number }> } | undefined
+  const startedArgsContainer: { args: Record<string, unknown> } = { args: {} }
   const steps: unknown[] = []
-  const start = vi.fn(() => ({
-    id: 'run-1',
-    meta: {},
-    result: Promise.resolve(engineResult),
-    cancel: () => {},
-    dispose: async () => {},
-  }))
+  const start = vi.fn((request: { args: Record<string, unknown> }) => {
+    startedArgsContainer.args = request.args
+    return {
+      id: 'run-1',
+      meta: {},
+      result: Promise.resolve(engineResult),
+      cancel: () => {},
+      dispose: async () => {},
+    }
+  })
   const ctx = {
     commands: {
       register: vi.fn((definition: {
@@ -82,6 +87,7 @@ function mount(
       handler({ rawInput, ...agent === undefined ? {} : { agent } }),
     tool,
     start,
+    startedArgsContainer,
     steps,
   }
 }
@@ -321,5 +327,12 @@ describe('the /patent-review command', () => {
     expect(result.text).toContain('未找到可审查的 Markdown 文件：.')
     expect(start).not.toHaveBeenCalled()
     await rm(empty, { recursive: true, force: true })
+  })
+
+  it('passes the configured temperature to the workflow script args', async () => {
+    const { handler, startedArgsContainer } = mount({ stopReason: 'completed', value: OUTCOME }, { reviewTemperature: 0.3 })
+    const result = await handler('chapters/03-background.md')
+    expect(result.kind).toBe('success')
+    expect(startedArgsContainer.args.reviewerTemperature).toBe(0.3)
   })
 })

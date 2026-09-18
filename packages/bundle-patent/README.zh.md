@@ -14,6 +14,7 @@ kind: "package-bundle"
 ## 目录
 
 - [使用本包](#use-this-package)
+- [讨论采样默认值](#the-discussion-sampling-default)
 - [MCP services 行](#the-mcp-services-row)
 - [Skills 分发](#skills-delivery)
 - [Model Experience](#model-experience)
@@ -69,6 +70,13 @@ dsh plugin --profile patent add @mtl-academic/dsh-patent
 -----
 
 <a id="the-mcp-services-row"></a>
+
+<a id="the-discussion-sampling-default"></a>
+
+## 讨论采样默认值
+
+资产载体把 0.7 的采样温度钉在该 profile 的顶层会话上：撰写交底书是创造性对话，接近确定性的采样会让行文发干。被委托的子会话带有持久的 subagent origin 标记而被跳过，因此审查链路自己的评分温度（0.2，见审查命令的 README）和用户派生的每个子代理都不受影响。在请求载荷尚未注入主体（subject）的旧核心上，该覆盖完全不生效，绝不靠猜。
+
 ## MCP services 行
 
 patch 插入 [`dsh-mcp-client`](../../mcp/mcp-client/README.zh.md) 行，承载 [`patent-services`](../../../python/patent-services/README.zh.md) stdio 服务（`serverName: patent`——`parse_disclosure_docx`、`export_disclosure`、`export_application_docs`、`render_drawio_figure`、`render_html_figure`、`search_patent_archive`、`run_experiment` 与 `search_cn_patents`）。两种 opt-in 模式，默认都关闭，未设置时该行保持 disabled（在 `--dump-config` 中可见，不在工具表）：设 `DSH_PATENT_SERVICES` 经 `uvx` 运行已安装的包（发布的 wheel，或本地 `uv build` + `uv tool install` 的产物）；或设 `DSH_PATENT_SERVICES_DIR` 指向源码检出，直接从该目录运行模块。任一方式下，模型在下一次启动时获得解析、导出、渲染、检索、实验与专利发现工具。
