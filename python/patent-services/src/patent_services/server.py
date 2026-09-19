@@ -34,8 +34,11 @@ from .export import (
     review_gate_warning,
 )
 from .parsing import parse_docx, parse_docx_to_file
-from .prior_art import search_cn_patents
-from .render import render_figure, render_html_figure
+# Aliased: a tool function defined with the same name as its implementation
+# shadows it at module level, and a body calling `search_cn_patents(...)`
+# would then resolve to itself — RecursionError on every call.
+from .prior_art import search_cn_patents as _search_cn_patents_impl
+from .render import render_figure, render_html_figure as _render_html_figure_impl
 from .search import search_archive
 
 mcp = MCPServer("patent")
@@ -172,7 +175,7 @@ def render_html_figure(source: str, fmt: str = "png") -> str:
     Returns:
         The written image's path.
     """
-    return render_html_figure(source, fmt)
+    return _render_html_figure_impl(source, fmt)
 
 
 @mcp.tool()
@@ -249,7 +252,7 @@ def search_cn_patents(query: str, limit: int = 10, since_year: int | None = None
     Returns:
         One line per hit plus the detail-page reading hint.
     """
-    return search_cn_patents(query, limit, since_year)
+    return _search_cn_patents_impl(query, limit, since_year)
 
 
 def main() -> None:

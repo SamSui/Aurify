@@ -54,3 +54,52 @@ def test_fail_loud_passes_successes_and_tool_errors_through():
         raise AssertionError("expected ToolError")
     except ToolError as exc:
         assert str(exc) == "检索词不能为空"
+
+def _stub_search_payload():
+    return {
+        "results": {
+            "total_num_results": 1,
+            "cluster": [
+                {
+                    "result": [
+                        {
+                            "patent": {
+                                "publication_number": "CN0000000A",
+                                "title": "测试对比文件",
+                                "assignee": "测试申请人",
+                                "priority_date": "2020-01-01",
+                            }
+                        }
+                    ]
+                }
+            ],
+        }
+    }
+
+
+def test_search_cn_patents_through_the_mcp_call_path(monkeypatch):
+    """Call the tool the way a client does. A tool function that shadows its
+    implementation import recurses instead of searching — this catches that
+    shape on the real call path, not just registration."""
+    import patent_services.prior_art as prior_art
+
+    monkeypatch.setattr(prior_art, "_fetch_json", lambda url: _stub_search_payload())
+    result = asyncio.run(mcp.call_tool("search_cn_patents", {"query": "测试检索词", "limit": 3}))
+    text = result.content[0].text
+    assert "CN0000000A" in text
+    assert "共 1 条命中" in text
+
+
+def test_render_html_figure_tool_resolves_the_implementation(monkeypatch):
+    """The same shadowing shape as search: the tool body must reach the
+    render module's function, not itself."""
+    import patent_services.server as server
+
+    calls = []
+    # The server bound the implementation at import time (the alias that fixed
+    # the shadowing), so patch the server's name, not the render module's.
+    monkeypatch.setattr(server, "_render_html_figure_impl", lambda source, fmt: calls.append((source, fmt)) or "/tmp/out.png")
+    result = asyncio.run(mcp.call_tool("render_html_figure", {"source": "figures/source/fig.html"}))
+    assert calls == [("figures/source/fig.html", "png")]
+    text = result.content[0].text
+    assert "/tmp/out.png" in text
