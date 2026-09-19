@@ -18,6 +18,7 @@ every quoted number at.
 from __future__ import annotations
 
 import datetime as _datetime
+import hashlib
 import os
 import re
 import subprocess
@@ -58,6 +59,10 @@ OUTPUT_TAIL_CHARS = 4000
 
 #: Where the run ledger lives, relative to the experiment directory.
 RUN_LOG_NAME = "run-log.md"
+
+#: Optional plotting script: when present, a successful run re-executes it so
+#: the figures under ``results/`` always reflect the latest numbers.
+PLOT_SCRIPT_NAME = "plot_results.py"
 
 DOCKER_GUIDANCE = (
     "运行仿真实验需要 docker 容器（保证环境一致、可复现）。未检测到 docker 命令："
@@ -160,7 +165,8 @@ def run_experiment(
         code = None
         output = _as_text(expired.stdout or "") + _as_text(expired.stderr or "")
     tail = output.strip()[-OUTPUT_TAIL_CHARS:]
-    append_run_log(directory, started, image, command, code, tail)
+    fingerprint = code_fingerprint(directory)
+    append_run_log(directory, started, image, command, code, tail, fingerprint)
     if timed_out:
         raise RuntimeError(
             f"实验超时（>{timeout_seconds}s）：{experiment}。已记入运行日志；"
@@ -170,8 +176,43 @@ def run_experiment(
         raise RuntimeError(
             f"实验运行失败（exit {code}）：{experiment}。已记入运行日志。输出尾部：\n{tail}"
         )
+    plot_note = ""
+    plot_script = directory / PLOT_SCRIPT_NAME
+    if plot_script.is_file():
+        plot_started = _datetime.datetime.now().astimezone()
+        plot_command = f"python {PLOT_SCRIPT_NAME}"
+        plot = subprocess.run(
+            [
+                "docker",
+                "run",
+                "--rm",
+                "-v",
+                f"{root.as_posix()}:/workspace",
+                "-w",
+                f"/workspace/experiments/{experiment}",
+                image,
+                "sh",
+                "-c",
+                plot_command,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=timeout_seconds,
+            check=False,
+        )
+        plot_tail = ((plot.stdout or "") + (plot.stderr or "")).strip()[-OUTPUT_TAIL_CHARS:]
+        append_run_log(directory, plot_started, image, plot_command, plot.returncode, plot_tail, fingerprint)
+        figures = sorted(
+            str(path.relative_to(directory))
+            for path in (directory / "results").glob("*.png")
+        )
+        plot_note = (
+            f"\n出图（exit {plot.returncode}）：{'、'.join(figures) if figures else '未产出 PNG'}\n"
+            if plot.returncode == 0
+            else f"\n出图失败（exit {plot.returncode}），输出尾部：\n{plot_tail}\n"
+        )
     log_path = directory / "results" / RUN_LOG_NAME
-    return f"实验完成（exit 0）。输出尾部：\n{tail}\n\n运行记录：{log_path}"
+    return f"实验完成（exit 0）。输出尾部：\n{tail}{plot_note}\n\n运行记录：{log_path}"
 
 
 def _as_text(raw: str | bytes) -> str:
@@ -181,6 +222,26 @@ def _as_text(raw: str | bytes) -> str:
     return raw
 
 
+def code_fingerprint(directory: Path) -> str:
+    r"""Hash the experiment's code files so every run-log entry anchors its numbers.
+
+    Args:
+        directory: the experiment directory; everything except ``results/``
+            (the run artifacts) participates in the hash.
+
+    Returns:
+        ``sha256:<hex>`` over the sorted (relative path, content) pairs.
+    """
+    digest = hashlib.sha256()
+    for path in sorted(directory.rglob("*")):
+        if not path.is_file() or "results" in path.relative_to(directory).parts:
+            continue
+        digest.update(path.relative_to(directory).as_posix().encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(path.read_bytes())
+    return f"sha256:{digest.hexdigest()[:16]}"
+
+
 def append_run_log(
     directory: Path,
     started: _datetime.datetime,
@@ -188,6 +249,7 @@ def append_run_log(
     command: str,
     code: int | None,
     tail: str,
+    fingerprint: str | None = None,
 ) -> Path:
     """Append one run record to the experiment's run log.
 
@@ -199,6 +261,8 @@ def append_run_log(
         command: the shell command the run executed.
         code: the exit code, or ``None`` for a timeout.
         tail: the combined output's tail chars.
+        fingerprint: the experiment code's hash, anchoring the numbers to the
+            exact code version that produced them.
 
     Returns:
         The run log's path.
@@ -206,11 +270,12 @@ def append_run_log(
     results = directory / "results"
     results.mkdir(parents=True, exist_ok=True)
     log_path = results / RUN_LOG_NAME
+    fingerprint_note = f"\n- 代码指纹：`{fingerprint}`" if fingerprint else ""
     header = (
         f"\n## {started.isoformat(timespec='seconds')}\n\n"
         f"- 镜像：`{image}`\n"
         f"- 命令：`{command}`\n"
-        f"- 退出码：{'超时' if code is None else code}\n"
+        f"- 退出码：{'超时' if code is None else code}{fingerprint_note}\n"
     )
     body = f"- 输出尾部：\n\n```text\n{tail}\n```\n" if tail else ""
     with log_path.open("a", encoding="utf-8") as handle:

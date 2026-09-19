@@ -54,6 +54,14 @@ describe('renderReport', () => {
     expect(report.endsWith('\n')).toBe(false)
   })
 
+  it('stamps the source digest under the scope line when given, and stays stamp-free without one', () => {
+    const stamped = renderReport(OUTCOME, '.', 'project', 'c83bc723545b5db4')
+    expect(stamped).toContain('> 审查范围：整项（项目根）')
+    expect(stamped).toContain('> 源指纹：c83bc723545b5db4')
+    expect(stamped.indexOf('源指纹')).toBeGreaterThan(stamped.indexOf('审查范围'))
+    expect(renderReport(OUTCOME, '.')).not.toContain('源指纹')
+  })
+
   it('renders a null overall when no dimension collected scores', () => {
     const report = renderReport({ overall: null, dimensions: [{ ...OUTCOME.dimensions[1]! }] }, 'brief.md')
     expect(report).toContain('**总分**：无（所有维度评分失败）')

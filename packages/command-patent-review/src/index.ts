@@ -22,6 +22,7 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-workflow'
 import { isReviewOutcome, renderReport, summarize, type ReviewOutcome } from './review.ts'
 import { REVIEW_SCRIPT } from './script.ts'
+import { sourceFingerprint } from '@deepseek-ai/dsh-tool-patent/fingerprint'
 
 export { isReviewOutcome, renderReport, summarize } from './review.ts'
 export { REVIEW_SCRIPT } from './script.ts'
@@ -273,7 +274,11 @@ async function executeReview(
   const safeName = rawLabel.replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '').replace(/\.md$/i, '') || 'project'
   await mkdir(join(reportRoot, 'review'), { recursive: true })
   const reportPath = relative(projectRoot, join(reportRoot, 'review', `${safeName}.review.md`)).replaceAll('\\', '/')
-  await writeFile(join(reportRoot, 'review', `${safeName}.review.md`), `${renderReport(outcome, file.label, scope)}\n`, 'utf8')
+  // The digest is taken after the run completes, over the report root's
+  // source set — the loop's freshness gate compares it against the live
+  // bytes, so a post-review source edit voids the report even when mtimes lie.
+  const fingerprint = await sourceFingerprint(reportRoot)
+  await writeFile(join(reportRoot, 'review', `${safeName}.review.md`), `${renderReport(outcome, file.label, scope, fingerprint)}\n`, 'utf8')
   // The attempt ledger is the loop's convergence memory: below-threshold
   // re-reviews accumulate here, and the loop's gate escalates to the user
   // instead of re-reviewing forever once they stop paying off.

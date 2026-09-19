@@ -17,17 +17,40 @@
  */
 
 export const REVIEW_SCRIPT = String.raw`
-const { fileLabel, fileContent, dimensions, passes, consistency, reviewerTemperature } = args
+const { fileLabel, fileContent, dimensions, passes, consistency, reviewerTemperature, rateLimitBackoffMs } = args
+const backoffMs = rateLimitBackoffMs ?? 4000
 phase('Patent review: ' + fileLabel)
 
 // Older workflow engines reject the temperature option before spawning any
-// child; degrade to the provider default so the review still runs.
+// child; degrade to the provider default so the review still runs. A child
+// that dies to a gateway rate limit usually resolves to null (the engine
+// swallows the reason), which the retry round below recovers — but a child
+// that fails loudly (start rejected, run crashed) throws, and a 429-shaped
+// throw is worth resending in place after a backoff: the same prompt usually
+// passes moments later, and a dead child costs its dimension a scoring pass.
+const sleep = typeof setTimeout === 'function'
+  ? (ms) => new Promise((resolve) => { setTimeout(resolve, ms) })
+  : null
 async function scoredAgent(prompt, opts) {
-  try {
-    return await agent(prompt, { ...opts, temperature: reviewerTemperature })
-  } catch (error) {
-    if (String(error && error.message).includes('temperature')) return agent(prompt, opts)
-    throw error
+  let withTemperature = true
+  let rateLimitRetries = 0
+  while (true) {
+    try {
+      return await agent(prompt, withTemperature ? { ...opts, temperature: reviewerTemperature } : opts)
+    } catch (error) {
+      const message = String(error && error.message)
+      if (withTemperature && message.includes('temperature')) {
+        withTemperature = false
+        continue
+      }
+      const rateLimited = /429|rate.?limit/i.test(message)
+      if (rateLimited && sleep !== null && rateLimitRetries < 2) {
+        rateLimitRetries += 1
+        await sleep(rateLimitRetries * backoffMs)
+        continue
+      }
+      throw error
+    }
   }
 }
 const SCORE_SCHEMA = {
@@ -130,7 +153,10 @@ if (consistency !== undefined) {
 const scored = await parallelInBatches(tasks, 5)
 function fold(items) {
   return dimensions.map((dimension) => {
-    const items0 = items.filter((item) => item.dimension === dimension && item.result !== null)
+    // A thunk the engine's parallel() absorbed (a child that failed loudly
+    // after its in-place backoff) lands here as null — it folds out like a
+    // null result, never crashing the run.
+    const items0 = items.filter((item) => item !== null && item.dimension === dimension && item.result !== null)
     const scores = items0.map((item) => item.result.score)
     const average = scores.length === 0 ? null : Math.round(scores.reduce((a, b) => a + b, 0) / scores.length)
     return {
@@ -164,12 +190,16 @@ for (const foldedDimension of folded) {
   }
 }
 if (retryThunks.length > 0) {
+  // The retry round fires right after a failed batch, which is usually a
+  // rate-limit window; pausing once before resending lets the window close
+  // instead of feeding the retry batch into the same 429s.
+  if (sleep !== null && backoffMs > 0) await sleep(backoffMs)
   const retried = scored.concat(await parallelInBatches(retryThunks, 5))
   folded = fold(retried)
 }
 let consistencyOutcome = null
 if (consistency !== undefined) {
-  const items = scored.filter((item) => item.kind !== undefined && item.result !== null)
+  const items = scored.filter((item) => item !== null && item.kind !== undefined && item.result !== null)
   const scores = items.map((item) => item.result.score)
   const byClaim = new Map()
   for (const item of items) {

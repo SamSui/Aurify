@@ -16,6 +16,12 @@ jobs:
       - name: Run patent-services test suite
         run: uv run --project python/patent-services --group test pytest python/patent-services/tests -q
 
+  # No TypeScript job on purpose: the three packages depend on ~90
+  # @deepseek-ai/* workspace packages that are not published to npm, so a
+  # standalone install (and therefore tsc/vitest) cannot resolve them here.
+  # The TS suites run inside the deepseek-harness monorepo; this repo's
+  # dsh-patent-full.bundle Release artifact carries that full build context.
+
   dist-integrity:
     runs-on: ubuntu-latest
     steps:

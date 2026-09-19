@@ -19,7 +19,7 @@
 | 审查 | `/patent-review` 七维 rubric + NLI 一致性，报告落档 |
 | 导出 | 代理机构模板交底书 + 申请文件三件套，docx/PDF，插图自动配对 |
 
-组成：**13 个技能**（撰写纪律）+ **8 个 MCP 工具**（确定性机制）+ 审查命令 + Web 结构化卡片与项目面板。Bundle 不带 persona（人格在档案补丁层，安装时会一并给出），可装入任意 dsh 档案。
+组成：**14 个技能**（撰写纪律）+ **8 个 MCP 工具**（确定性机制）+ 审查命令 + Web 结构化卡片与项目面板。Bundle 不带 persona（人格在档案补丁层，安装时会一并给出），可装入任意 dsh 档案。
 
 ## 安装（最短路径）
 
@@ -44,7 +44,7 @@ uv tool install dist/deepseek_harness_patent_services-0.1.0-py3-none-any.whl
 ## 仓库结构
 
 ```text
-packages/bundle-patent/            # 能力 bundle：13 技能 + Web 卡片/面板 + MCP 行（@mtl-academic/dsh-patent）
+packages/bundle-patent/            # 能力 bundle：14 技能 + Web 卡片/面板 + MCP 行（@mtl-academic/dsh-patent）
 packages/tool-patent/              # 就绪度打分 + 权利要求检查工具
 packages/command-patent-review/    # /patent-review 确定性审查命令（七维 rubric）
 python/patent-services/            # Python MCP 服务：导出/解析/渲染/检索/实验/查新

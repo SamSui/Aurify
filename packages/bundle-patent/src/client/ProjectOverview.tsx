@@ -26,6 +26,21 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 export function ProjectOverview({ view, t }: { view: ProjectView; t: PatentBodyProps['t'] }): ReactNode {
   return (
     <div className={css.overview}>
+      <Section title={t('panel.stage')}>
+        <div className={css.rows}>
+          <div className={css.rowLine}>
+            <StateDot state={view.loop.stage === 'ready' ? 'done' : 'idle'} />
+            <span>{t(`panel.stage.${view.loop.stage}`)}</span>
+            <span className={css.hint}>{`${t('panel.threshold')} ${view.loop.threshold}`}</span>
+          </div>
+          {view.loop.degraded ? (
+            <div className={css.rowLine}>
+              <StateDot state="idle" />
+              <span className={css.hint}>{t('panel.degraded')}</span>
+            </div>
+          ) : null}
+        </div>
+      </Section>
       <Section title={t('panel.project')}>
         <div className={css.rows}>
           <div className={css.rowLine}>
@@ -56,7 +71,17 @@ export function ProjectOverview({ view, t }: { view: ProjectView; t: PatentBodyP
       <Section title={t('panel.review')}>
         {view.review.length === 0 ? <span className={css.empty}>{t('panel.empty')}</span> : (
           <ul className={css.names}>
-            {view.review.map(name => <li key={name}>{name}</li>)}
+            {view.review.map((name) => {
+              const report = view.loop.reports.find(candidate => candidate.name === name)
+              return (
+                <li key={name}>
+                  {name}
+                  {report !== undefined && report.score !== null ? (
+                    <span className={css.hint}>{`${report.score}${report.partial ? ` · ${t('panel.partial')}` : ''}`}</span>
+                  ) : null}
+                </li>
+              )
+            })}
           </ul>
         )}
       </Section>

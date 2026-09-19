@@ -122,7 +122,6 @@ patch 插入 [`dsh-mcp-client`](../../mcp/mcp-client/README.zh.md) 行，承载 
 
 - **个人、单用户范围**——无多用户界面、无 per-session preset；profile 就是组合单元。
 - **skill 修改需重载**——runtime skill 在插件加载时读取、不被监视；文件系统 provider 的监视行为不适用。
-- **npm 发布会丢掉 skills 资产**——workspace 约束门禁把 `files` 钉在不含 `skills/` 条目的统一组合包清单上；发布本包需要放宽该清单（包保持 workspace 内部使用时无影响，`files` 不会被查询）。
 - **HTML 附图经 Edge/Chrome 无头截图栅格化**——`render_html_figure` 覆盖 vendor 的 diagram-design 产物；固定 1600×2400 视口对特别高的画布可能裁切。
 
 <a id="dev-note"></a>

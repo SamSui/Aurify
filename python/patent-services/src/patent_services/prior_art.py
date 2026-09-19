@@ -20,11 +20,24 @@ from __future__ import annotations
 
 import json
 import re
+import time
 import urllib.parse
 import urllib.request
 
 #: Seconds one search request may run before failing loud.
 SEARCH_TIMEOUT_SECONDS = 30
+
+#: How long one identical query's result stays cached in this server process:
+#: the interview's rolling re-searches repeat queries within minutes, and a
+#: repeated call should not re-hit (or re-trip) the endpoint for the same words.
+SEARCH_CACHE_TTL_SECONDS = 1800
+
+#: Upper bound on cached queries, so a long-lived server cannot grow forever.
+SEARCH_CACHE_MAX_ENTRIES = 50
+
+#: The in-process cache: (query, limit, since_year) -> (monotonic time, result
+#: text). Server-process lifetime only — a restart forgets it, by design.
+_SEARCH_CACHE: dict[tuple[str, int, int | None], tuple[float, str]] = {}
 
 #: Browser User-Agent: the endpoint tolerates anonymous calls but rejects
 #: requests identifying as a bare library client.
@@ -84,6 +97,10 @@ def search_cn_patents(query: str, limit: int = 10, since_year: int | None = None
         raise ValueError("检索词不能为空")
     if not 1 <= limit <= PAGE_SIZE:
         raise ValueError(f"limit 必须在 1-{PAGE_SIZE} 之间：{limit}")
+    cache_key = (query, limit, since_year)
+    cached = _SEARCH_CACHE.get(cache_key)
+    if cached is not None and time.monotonic() - cached[0] < SEARCH_CACHE_TTL_SECONDS:
+        return cached[1] + f"\n（缓存命中：{SEARCH_CACHE_TTL_SECONDS // 60} 分钟内同一检索词直接复用结果）"
     payload = _fetch_json(build_search_url(query, since_year))
     results = payload.get("results") if isinstance(payload, dict) else None
     clusters = results.get("cluster") if isinstance(results, dict) else None
@@ -112,7 +129,12 @@ def search_cn_patents(query: str, limit: int = 10, since_year: int | None = None
     if not lines:
         return header + "（无命中，换检索词再试）"
     detail_hint = "读某篇的摘要与权利要求：用 web_fetch 抓 https://patents.google.com/patent/<公开号>/zh"
-    return header + "\n" + "\n".join(lines) + "\n" + detail_hint
+    result = header + "\n" + "\n".join(lines) + "\n" + detail_hint
+    if len(_SEARCH_CACHE) >= SEARCH_CACHE_MAX_ENTRIES:
+        oldest = min(_SEARCH_CACHE, key=lambda key: _SEARCH_CACHE[key][0])
+        del _SEARCH_CACHE[oldest]
+    _SEARCH_CACHE[cache_key] = (time.monotonic(), result)
+    return result
 
 
 def _fetch_json(url: str) -> object:

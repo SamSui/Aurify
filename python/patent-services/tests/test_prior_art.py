@@ -7,6 +7,7 @@ import urllib.request
 
 import pytest
 
+from patent_services import prior_art
 from patent_services.prior_art import build_search_url, search_cn_patents
 
 SAMPLE_PAYLOAD = {
@@ -152,3 +153,17 @@ def test_validation():
         search_cn_patents("任意", limit=0)
     with pytest.raises(ValueError, match="limit"):
         search_cn_patents("任意", limit=11)
+
+
+def test_identical_query_hits_the_in_process_cache(monkeypatch):
+    """The interview's rolling re-searches repeat queries: the second identical
+    call must reuse the cached result instead of re-hitting the endpoint."""
+    calls = []
+    monkeypatch.setattr(prior_art, "_fetch_json", lambda url: calls.append(url) or SAMPLE_PAYLOAD)
+    prior_art._SEARCH_CACHE.clear()
+    first = search_cn_patents("植物补光灯 缓存测试")
+    second = search_cn_patents("植物补光灯 缓存测试")
+    assert len(calls) == 1
+    assert "CN110123456A" in first
+    assert "缓存命中" in second
+    prior_art._SEARCH_CACHE.clear()

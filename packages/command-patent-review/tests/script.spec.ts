@@ -4,6 +4,8 @@
  * fresh function realm — so the implied-eval rule is disabled for the file, not dodged.
  */
 
+// oxlint-disable typescript/no-implied-eval -- the Function constructor IS the test subject.
+
 import { describe, expect, it, vi } from 'vitest'
 import { REVIEW_SCRIPT } from '../src/script.ts'
 
@@ -32,7 +34,16 @@ async function runScript(args: Record<string, unknown>, agent: (prompt: string, 
     calls.push({ prompt, options })
     return agent(prompt, options)
   })
-  const parallel = async (thunks: (() => Promise<unknown>)[]): Promise<unknown[]> => Promise.all(thunks.map(thunk => thunk()))
+  // The engine's parallel() absorbs a thunk's rejection into null (fatal
+  // workflow errors aside) — mirror that so throwing stubs behave as they
+  // would in a real run instead of failing the whole script.
+  const parallel = async (thunks: (() => Promise<unknown>)[]): Promise<unknown[]> => Promise.all(thunks.map(async (thunk) => {
+    try {
+      return await thunk()
+    } catch {
+      return null
+    }
+  }))
   type ScriptFn = (
     agent: unknown,
     parallel: unknown,
@@ -96,7 +107,7 @@ describe('the fixed patent-review script', () => {
 
   it('retries a failed pass once and folds the retry score in', async () => {
     const { value } = await runScript(
-      { fileLabel: 'brief.md', fileContent: 'x', dimensions: DIMENSIONS, passes: 2 },
+      { fileLabel: 'brief.md', fileContent: 'x', dimensions: DIMENSIONS, passes: 2, rateLimitBackoffMs: 1 },
       (prompt: string) => prompt.includes('completeness') && prompt.includes('pass 1 of 2')
         ? null
         : { score: 90, evidence: 'e', suggestion: 's' },
@@ -112,7 +123,7 @@ describe('the fixed patent-review script', () => {
 
   it('keeps the failure counted when the retry pass also fails', async () => {
     const { value } = await runScript(
-      { fileLabel: 'brief.md', fileContent: 'x', dimensions: DIMENSIONS, passes: 2 },
+      { fileLabel: 'brief.md', fileContent: 'x', dimensions: DIMENSIONS, passes: 2, rateLimitBackoffMs: 1 },
       (prompt: string) => prompt.includes('completeness') && (prompt.includes('pass 1 of 2') || prompt.includes('pass 3 of 2'))
         ? null
         : { score: 90, evidence: 'e', suggestion: 's' },
@@ -128,7 +139,7 @@ describe('the fixed patent-review script', () => {
 
   it('returns null averages and a null overall when every pass fails', async () => {
     const { value } = await runScript(
-      { fileLabel: 'brief.md', fileContent: 'x', dimensions: [DIMENSIONS[0]!], passes: 2 },
+      { fileLabel: 'brief.md', fileContent: 'x', dimensions: [DIMENSIONS[0]!], passes: 2, rateLimitBackoffMs: 1 },
       () => null,
     )
     expect(value).toEqual({
@@ -137,6 +148,45 @@ describe('the fixed patent-review script', () => {
         key: 'completeness', title: '内容完整性', weight: 0.5, scores: [], average: null,
         failedPasses: 2, evidence: [], suggestions: [],
       }],
+    })
+  })
+
+  it('backs off and resends in place when a child fails loudly with a 429-shaped error', async () => {
+    // The engine resolves null for the quiet rate-limit shape (recovered by
+    // the retry round below); start/crash failures throw with the gateway's
+    // message, and those are what this in-place backoff recovers.
+    let completenessAttempts = 0
+    let noveltyAttempts = 0
+    const { value } = await runScript(
+      { fileLabel: 'brief.md', fileContent: 'x', dimensions: DIMENSIONS, passes: 2, rateLimitBackoffMs: 1 },
+      (prompt: string) => {
+        if (prompt.includes('completeness')) {
+          // One 429 then success: the backoff recovers the pass in place.
+          if (++completenessAttempts === 1) throw new Error('gateway 429 rate limited (code 1302)')
+          return { score: 90, evidence: 'e', suggestion: 's' }
+        }
+        // Both novelty passes fail with 429, recover on the in-place resend.
+        if (++noveltyAttempts <= 2) throw new Error('HTTP 429 too many requests')
+        return { score: 70, evidence: 'e', suggestion: 's' }
+      },
+    )
+    expect(value).toMatchObject({
+      overall: 80,
+      dimensions: [
+        { key: 'completeness', average: 90, failedPasses: 0, scores: [90, 90] },
+        { key: 'novelty', average: 70, failedPasses: 0, scores: [70, 70] },
+      ],
+    })
+  })
+
+  it('gives up on a child after two rate-limit retries and keeps the failure counted', async () => {
+    const { value } = await runScript(
+      { fileLabel: 'brief.md', fileContent: 'x', dimensions: [DIMENSIONS[0]!], passes: 1, rateLimitBackoffMs: 1 },
+      () => { throw new Error('429 slow down') },
+    )
+    expect(value).toMatchObject({
+      overall: null,
+      dimensions: [{ key: 'completeness', average: null, failedPasses: 1, scores: [] }],
     })
   })
 })

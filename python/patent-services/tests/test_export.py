@@ -236,11 +236,83 @@ def test_export_summary_warns_when_declared_figures_missing(tmp_path):
     summary = _export_summary("/tmp/out.docx", project)
     assert "内嵌附图 2 张" in summary
     assert "警告" in summary
-    assert "声明 3 张" in summary
-    assert "只收集到 2 张" in summary
+    assert "缺 图3" in summary
+    assert "图N.png" in summary
 
     ok = _export_summary("/tmp/out.docx", add_figures(build_project(tmp_path / "other")))
     assert "内嵌附图 2 张" in ok and "警告" not in ok
+
+
+def test_export_summary_names_figure_files_the_naming_contract_rejected(tmp_path):
+    from patent_services.export import _export_summary
+
+    project = add_figures(build_project(tmp_path / "project"))
+    figures = project / "figures"
+    (figures / "图3.jpg").write_bytes(TINY_PNG)
+    (figures / "图 4.png").write_bytes(TINY_PNG)
+    (figures / "preview.png").write_bytes(TINY_PNG)
+    summary = _export_summary("/tmp/out.docx", project)
+    assert "内嵌附图 2 张" in summary
+    assert "命名未收录：图 4.png、图3.jpg" in summary
+    # A file that never looked like 图N is not the naming contract's business.
+    assert "preview" not in summary
+
+
+def test_export_project_stamps_a_fingerprint_sidecar_beside_the_docx(tmp_path):
+    from patent_services.export import export_project
+    from patent_services.fingerprint import source_fingerprint
+
+    project = add_figures(build_project(tmp_path / "project"))
+    output = Path(export_project(str(project)))
+    sidecar = output.with_suffix(".fingerprint")
+    assert sidecar.name == "一种测试存储装置-交底书.fingerprint"
+    assert sidecar.read_text(encoding="ascii") == source_fingerprint(project)
+
+
+def test_review_gate_warning_mirrors_the_loop_score_gate(tmp_path):
+    from patent_services.export import review_gate_warning
+
+    project = build_project(tmp_path / "project")
+    # No report at all: the gate never passed.
+    assert "还没有审查报告" in review_gate_warning(project)
+
+    review = project / "review"
+    review.mkdir()
+    (review / "project.review.md").write_text("总分 85\n\n> 审查范围：整项（项目根）\n", encoding="utf-8")
+    assert review_gate_warning(project) == ""
+
+    (review / "project.review.md").write_text("总分 70\n\n> 审查范围：整项（项目根）\n", encoding="utf-8")
+    assert "低于达标线 80" in review_gate_warning(project)
+
+    # The newest report wins, a partial scope is no verdict.
+    (review / "later.review.md").write_text("总分 90\n\n> 审查范围：部分（chapters）\n", encoding="utf-8")
+    assert "只覆盖局部目标" in review_gate_warning(project)
+
+    # A project threshold overrides, and the 查新不可用 marker relaxes by ten.
+    (review / "later.review.md").write_text("总分 90\n\n> 审查范围：整项（项目根）\n", encoding="utf-8")
+    (project / "patent.yml").write_text(
+        "formatVersion: 1\nname: 一种测试存储装置\nstatus: drafting\nreviewThreshold: 95\n", encoding="utf-8"
+    )
+    assert "低于达标线 95" in review_gate_warning(project)
+    reference = project / "reference"
+    reference.mkdir()
+    (reference / "prior-art.md").write_text("查新不可用：网络不可达，待补查\n", encoding="utf-8")
+    # 90 clears the relaxed bar of 85 but not the configured 95.
+    assert review_gate_warning(project) == ""
+    (review / "later.review.md").write_text("总分 80\n\n> 审查范围：整项（项目根）\n", encoding="utf-8")
+    assert "已放宽 10 分" in review_gate_warning(project)
+    assert "低于达标线 85" in review_gate_warning(project)
+
+
+def test_disclosure_absent_warning_keeps_the_default_deliverable_visible(tmp_path):
+    from patent_services.export import disclosure_absent_warning
+
+    project = build_application_project(tmp_path / "project")
+    assert "默认交付物" in disclosure_absent_warning(project)
+    exports = project / "exports"
+    exports.mkdir()
+    (exports / "一种测试存储装置-交底书.docx").write_bytes(b"docx")
+    assert disclosure_absent_warning(project) == ""
 
 
 def build_application_project(root):

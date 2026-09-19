@@ -18,7 +18,13 @@ from pathlib import Path
 from mcp.server.mcpserver import MCPServer
 
 from . import experiments
-from .export import _export_summary, export_application, export_project
+from .export import (
+    _export_summary,
+    disclosure_absent_warning,
+    export_application,
+    export_project,
+    review_gate_warning,
+)
 from .parsing import parse_docx, parse_docx_to_file
 from .prior_art import search_cn_patents
 from .render import render_figure, render_html_figure
@@ -56,12 +62,19 @@ def export_disclosure(project_dir: str, fmt: str = "docx") -> str:
         fmt: ``docx`` (default) or ``pdf``.
 
     Returns:
-        The written file's path plus the embedded figure count — the model
-        reads it back and must not present a zero-figure export as complete
-        when the 附图说明 chapter declares figures.
+        The written file's path plus the embedded figure count (naming misses
+        are named explicitly), the review score gate's state as a soft warning,
+        and the source digest sidecar stamped beside the docx — the model reads
+        it back and must not present an unreviewed or zero-figure export as
+        complete.
     """
     written = export_project(project_dir, fmt)
-    return _export_summary(written, Path(project_dir))
+    root = Path(project_dir)
+    lines = [_export_summary(written, root)]
+    gate = review_gate_warning(root)
+    if gate:
+        lines.append(gate)
+    return "\n".join(lines)
 
 
 @mcp.tool()
@@ -76,12 +89,18 @@ def export_application_docs(project_dir: str, fmt: str = "docx") -> str:
         fmt: ``docx`` (default) or ``pdf``.
 
     Returns:
-        The written file's path plus the embedded figure count, with a
-        warning when the 附图说明 chapter declares figures the export did
-        not embed (naming misses die loudly here, not in the reader's hands).
+        The written file's path plus the embedded figure count (naming misses
+        named explicitly), and a warning when the 附图说明 chapter declares
+        figures the export did not embed or when the disclosure (the default
+        deliverable) was never exported — skipping it must be a visible choice.
     """
     written = export_application(project_dir, fmt)
-    return _export_summary(written, Path(project_dir))
+    root = Path(project_dir)
+    lines = [_export_summary(written, root)]
+    absent = disclosure_absent_warning(root)
+    if absent:
+        lines.append(absent)
+    return "\n".join(lines)
 
 
 @mcp.tool()

@@ -11,6 +11,7 @@
 
 import { readdir, readFile, stat, access } from 'node:fs/promises'
 import { join, resolve, basename } from 'node:path'
+import { sourceFingerprint } from './fingerprint.ts'
 
 /** Pipeline stages in execution order; `done` is the completed verdict. */
 export const LOOP_STAGES = ['init', 'align', 'chapters', 'experiments', 'figures', 'review', 'export'] as const
@@ -35,6 +36,34 @@ const DEGRADED_REVIEW_DELTA = 10
 
 /** The overall score line a review report carries: `总分 81`. */
 const REPORT_SCORE = /总分\s*(\d+)/
+
+/** The source-digest stamp a report carries: `> 源指纹：<16 hex chars>`. */
+const REPORT_FINGERPRINT = /^> 源指纹：([0-9a-f]{16})/m
+
+/** One revision-list entry: `- **维度**（均分 N，影响 X.Y）：建议`. */
+const REVISION_ITEM = /^[-*] \*\*(.+?)\*\*（均分 \d+，影响 [\d.]+）：(.+)$/gm
+
+/** How many revision-list items the review gap names as priorities. */
+const REVISION_PRIORITY_COUNT = 3
+
+/**
+ * Extract the report's revision list (top items first — the renderer orders
+ * by weighted impact) so the gap can name what to fix before the model opens
+ * the report.
+ * @param report - the report text.
+ * @returns up to {@link REVISION_PRIORITY_COUNT} `维度：建议` strings, empty when the section is absent.
+ */
+function revisionPriorities(report: string | undefined): string[] {
+  if (report === undefined) return []
+  const section = report.split(/^## 修订清单（按影响排序）\s*$/m)[1]
+  if (section === undefined) return []
+  const items: string[] = []
+  for (const match of section.matchAll(REVISION_ITEM)) {
+    items.push(`${match[1]}：${match[2]}`)
+    if (items.length >= REVISION_PRIORITY_COUNT) break
+  }
+  return items
+}
 
 /** The degradation marker the research skill writes when the search is unreachable. */
 const PRIOR_ART_UNAVAILABLE = /查新不可用/
@@ -308,12 +337,24 @@ async function reviewGap(root: string, effectiveThreshold: number, degraded: boo
   if (/审查范围：部分/.test(content ?? '')) {
     return `最新审查报告只覆盖了局部目标（${latest.name}）——审查整个项目（目标用 "."）后重审，局部报告不作为整项达标的依据`
   }
-  const sourceTime = await newestSourceTime(root)
-  if (latest.time < sourceTime) return `最新审查报告（总分 ${score}）早于源文件的最新修改——内容已变，需要重审`
+  // Freshness prefers the stamped source digest — it survives git checkouts
+  // and syncs that rewrite mtimes; reports without a stamp (legacy) fall back
+  // to the mtime comparison.
+  const stamped = REPORT_FINGERPRINT.exec(content ?? '')?.[1]
+  if (stamped !== undefined) {
+    if (await sourceFingerprint(root) !== stamped) {
+      return `最新审查报告（总分 ${score}）的源指纹与当前源文件不符——审查之后源文件已变动，需要重审`
+    }
+  } else {
+    const sourceTime = await newestSourceTime(root)
+    if (latest.time < sourceTime) return `最新审查报告（总分 ${score}）早于源文件的最新修改（旧报告无源指纹，按修改时间判定）——内容已变，需要重审`
+  }
   const stall = await stalledReview(reviewDir, effectiveThreshold)
   if (stall !== undefined) return stall
   if (score < effectiveThreshold) {
-    return `最新审查总分 ${score} 低于达标线 ${effectiveThreshold}${degraded ? '（查新不可用，已放宽 10 分）' : ''}——对照报告修订清单逐维度修订后重审`
+    const priorities = revisionPriorities(content)
+    const priority = priorities.length > 0 ? `；优先修订：${priorities.join('；')}` : ''
+    return `最新审查总分 ${score} 低于达标线 ${effectiveThreshold}${degraded ? '（查新不可用，已放宽 10 分）' : ''}——对照报告修订清单逐维度修订后重审${priority}`
   }
   return undefined
 }
@@ -377,21 +418,19 @@ async function exportGap(root: string): Promise<string | undefined> {
   if (!await exists(exportsDir)) return 'exports/ 不存在——交底书从未导出'
   const exported = (await readdir(exportsDir)).filter(name => name.endsWith('-交底书.docx'))
   if (exported.length === 0) return 'exports/ 下没有 *-交底书.docx'
-  let newestSource = 0
-  for (const dir of ['chapters', 'figures']) {
-    const dirPath = join(root, dir)
-    if (!await exists(dirPath)) continue
-    for (const entry of await readdir(dirPath, { withFileTypes: true })) {
-      if (!entry.isFile()) continue
-      newestSource = Math.max(newestSource, await mtimeOf(join(dirPath, entry.name)))
-    }
-  }
-  newestSource = Math.max(newestSource, await mtimeOf(join(root, 'brief.md')))
   const latest = exported[exported.length - 1]
   if (latest === undefined) return 'exports/ 下没有 *-交底书.docx'
-  const exportPath = join(exportsDir, latest)
-  const exportTime = await mtimeOf(exportPath)
-  if (exportTime < newestSource) return `导出物 ${latest} 早于源文件的最新修改（需要重新导出）`
+  // The exporter stamps a source digest beside each docx; when present it is
+  // the freshness verdict (mtime stays the fallback for legacy exports).
+  const sidecar = await readText(join(exportsDir, latest.replace(/\.docx$/, '.fingerprint')))
+  if (sidecar !== undefined) {
+    if (await sourceFingerprint(root) !== sidecar.trim()) {
+      return `导出物 ${latest} 的源指纹与当前源文件不符——导出之后源文件已变动，改源后调 export_disclosure 重新导出`
+    }
+    return undefined
+  }
+  const exportTime = await mtimeOf(join(exportsDir, latest))
+  if (exportTime < await newestSourceTime(root)) return `导出物 ${latest} 早于源文件的最新修改（需要重新导出）`
   return undefined
 }
 

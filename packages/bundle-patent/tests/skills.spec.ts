@@ -41,10 +41,13 @@ async function skillDir(files: Record<string, string>): Promise<string> {
 describe('the patent-assets plugin', () => {
   it('registers every shipped skill on the skills registry', () => {
     const registered: { name: string }[] = []
-    const ctx = { skills: { register: vi.fn((skill: { name: string }) => {
-      registered.push(skill)
-      return () => {}
-    }) } }
+    const ctx = {
+      skills: { register: vi.fn((skill: { name: string }) => {
+        registered.push(skill)
+        return () => {}
+      }) },
+      on: vi.fn(() => () => {}),
+    }
     apply(ctx as never)
     expect(registered.map(skill => skill.name)).toEqual(SHIPPED_SKILL_NAMES)
   })

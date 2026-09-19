@@ -22,12 +22,17 @@
       "types": "./lib/types/invariant.d.ts",
       "default": "./lib/invariant.js"
     },
+    "./fingerprint": {
+      "types": "./lib/types/fingerprint.d.ts",
+      "default": "./lib/fingerprint.js"
+    },
     "./src/*": "./src/*",
     "./package.json": "./package.json"
   },
   "files": [
     "lib/index.js",
     "lib/invariant.js",
+    "lib/fingerprint.js",
     "lib/types/**/*.d.ts"
   ],
   "license": "MIT",

@@ -236,6 +236,10 @@ export function apply(ctx: Context): void {
               warnings: { type: 'integer', required: true },
             },
           },
+          // The two lint tools' violations schemas are structurally alike by
+          // design (same wire shape, different fields); the type inference on
+          // defineTool schemas needs these inline, so the clone is exempted.
+          /* jscpd:ignore-start */
           violations: {
             type: 'array',
             required: true,
@@ -250,6 +254,7 @@ export function apply(ctx: Context): void {
               },
             },
           },
+          /* jscpd:ignore-end */
         },
       },
       render: (_args, value) => renderClaimsLint(value),
@@ -297,6 +302,7 @@ export function apply(ctx: Context): void {
               warnings: { type: 'integer', required: true },
             },
           },
+          /* jscpd:ignore-start */
           violations: {
             type: 'array',
             required: true,
@@ -311,6 +317,7 @@ export function apply(ctx: Context): void {
               },
             },
           },
+          /* jscpd:ignore-end */
         },
       },
       render: (_args, value) => [{

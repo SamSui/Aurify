@@ -1,0 +1,28 @@
+# Test-only overlay: the patent capability rows composed over the shipped
+# headless profile. The shipped patent profile template is web-based (dsh-base
+# + web-app + this bundle); a keyless smoke cannot activate the browser chain,
+# so it carries the bundle's rows over headless instead — same plugins, same
+# re-enabled workflow engine, no server. Relative name resolves beside this
+# file (two levels up is the bundle package root).
+- id: headless-startup
+  disabled: true
+
+- id: headless-runner
+  disabled: true
+
+- insert:
+    # The five-party alignment scorer, the claims/prose lints, the loop assessor.
+    - id: tool-patent
+      name: '@deepseek-ai/dsh-tool-patent'
+
+    # The bundle's own carrier: shipped SKILL.md assets as runtime skills plus
+    # the discussion sampling default.
+    - id: patent-assets
+      name: '../../src/index.ts'
+
+    # The deterministic /patent-review command (fixed workflow script + versioned rubric).
+    - id: command-patent-review
+      name: '@deepseek-ai/dsh-command-patent-review'
+
+# The MCP services row is opt-in by design; it is not inserted here at all —
+# the smoke asserts the patent rows that MUST be live, not the env-gated one.

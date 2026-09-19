@@ -117,7 +117,6 @@ None; the cards and the overview tab add nothing to the request prefix.
 
 - **Personal, single-user scope** — no multi-user surfaces, no per-session preset; the profile is the unit of composition.
 - **Skill edits need a reload** — runtime skills are read at plugin load, not watched; the filesystem provider's watch behavior does not apply.
-- **npm publishing would drop the skills assets** — the workspace-constraints gate pins `files` to the uniform bundle list without a `skills/` entry; publishing this package would need that list widened (moot while the package stays workspace-internal, where `files` is not consulted).
 - **HTML figures rasterize through the Edge/Chrome headless screenshot** — `render_html_figure` covers the vendored diagram-design outputs; exotic viewport assumptions (fixed 1600×2400) may clip very tall canvases.
 
 <a id="dev-note"></a>

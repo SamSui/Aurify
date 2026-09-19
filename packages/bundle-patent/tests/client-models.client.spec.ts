@@ -156,4 +156,66 @@ describe('buildProjectView', () => {
     expect(view.isProject).toBe(false)
     expect(view.drafted).toBe(0)
   })
+
+  it('derives the coarse loop stage from the second-phase reads', () => {
+    const eightChapters = listing(Array.from({ length: 8 }, (_, index) => ({
+      name: `0${index + 1}-name.md`, type: 'file' as const, size: 300,
+    })))
+    const projectRoot = listing([
+      { name: 'patent.yml', type: 'file', size: 120 },
+      { name: 'brief.md', type: 'file', size: 800 },
+      { name: 'chapters', type: 'directory' },
+      { name: 'review', type: 'directory' },
+      { name: 'figures', type: 'directory' },
+      { name: 'experiments', type: 'directory' },
+      { name: 'exports', type: 'directory' },
+    ])
+    const base = {
+      briefText: '## 技术领域\n\n存储。\n\n## 背景技术\n\n慢。\n\n## 技术问题\n\n提速。\n\n## 发明内容\n\n新结构。\n\n## 有益效果\n\n省空间。\n',
+      effectText: '命中率达到 95%。',
+      drawingsText: '无附图\n',
+      experimentsReadmeText: '无需实验：纯界面方法。\n',
+      experimentRunLogs: [],
+      exportsListing: listing([]),
+      reportTexts: [],
+      patentYml: 'name: 测试\nstatus: drafting\nreviewThreshold: 85\n',
+      priorArtText: null,
+    }
+    // All presence gates green except review: no passing report.
+    const atReview = buildProjectView(projectRoot, eightChapters, listing([{ name: 'p.review.md', type: 'file', size: 900 }]), null, null, base.patentYml, base.drawingsText, base)
+    expect(atReview.loop.stage).toBe('review')
+    expect(atReview.loop.threshold).toBe(85)
+
+    // A passing whole-project report flips the stage to export, a partial one does not.
+    const passing = buildProjectView(projectRoot, eightChapters, listing([{ name: 'p.review.md', type: 'file', size: 900 }]), null, null, base.patentYml, base.drawingsText, {
+      ...base,
+      exportsListing: listing([{ name: '测试-交底书.docx', type: 'file', size: 900 }]),
+      reportTexts: [{ name: 'p.review.md', text: '总分 88\n\n> 审查范围：整项（项目根）\n' }],
+    })
+    expect(passing.loop.stage).toBe('ready')
+
+    const partialOnly = buildProjectView(projectRoot, eightChapters, listing([{ name: 'p.review.md', type: 'file', size: 900 }]), null, null, base.patentYml, base.drawingsText, {
+      ...base,
+      reportTexts: [{ name: 'p.review.md', text: '总分 96\n\n> 审查范围：部分（chapters）\n' }],
+    })
+    expect(partialOnly.loop.stage).toBe('review')
+    expect(partialOnly.loop.reports[0]?.passing).toBe(false)
+
+    // The degraded marker relaxes the bar by ten.
+    const degraded = buildProjectView(projectRoot, eightChapters, listing([{ name: 'p.review.md', type: 'file', size: 900 }]), null, null, base.patentYml, base.drawingsText, {
+      ...base,
+      priorArtText: '查新不可用：网络不可达，待补查\n',
+      reportTexts: [{ name: 'p.review.md', text: '总分 78\n' }],
+    })
+    expect(degraded.loop.threshold).toBe(75)
+    expect(degraded.loop.reports[0]?.passing).toBe(true)
+
+    // A quantitative effect without a run log or the marker pins experiments.
+    const atExperiments = buildProjectView(projectRoot, eightChapters, null, null, null, base.patentYml, base.drawingsText, {
+      ...base,
+      experimentsReadmeText: null,
+      experimentRunLogs: [false],
+    })
+    expect(atExperiments.loop.stage).toBe('experiments')
+  })
 })

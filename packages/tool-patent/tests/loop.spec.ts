@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { assessLoopState } from '../src/loop.ts'
+import { sourceFingerprint } from '../src/fingerprint.ts'
 import * as ToolPatent from '../src/index.ts'
 
 let root: string
@@ -226,6 +227,76 @@ describe('assessLoopState stage machine', () => {
     const state = await assessLoopState(dir)
     expect(state.stage).toBe('export')
     expect(state.gaps[0]?.detail).toContain('早于源文件')
+  })
+
+  it('judges review freshness by the stamped source digest, not mtimes', async () => {
+    const dir = await fullProject('fingerprinted-review')
+    await writeFile(join(dir, 'chapters', '08-drawings.md'), `# 附图说明\n\n无附图\n${BODY}`, 'utf8')
+    await mkdir(join(dir, 'review'), { recursive: true })
+    const fingerprint = await sourceFingerprint(dir)
+    // A stamped report whose mtime lies in the past still counts as fresh —
+    // this is the checkout/sync case the mtime gate got wrong.
+    await writeFile(join(dir, 'review', 'project.review.md'), `总分 85\n\n> 源指纹：${fingerprint}\n`, 'utf8')
+    const stale = new Date(Date.now() - 60_000)
+    await utimes(join(dir, 'review', 'project.review.md'), stale, stale)
+    expect((await assessLoopState(dir)).stage).toBe('export')
+
+    // Editing a source after the review voids the stamp even with a fresh mtime.
+    await writeFile(join(dir, 'chapters', '03-background.md'), `# 背景技术\n\n审查之后的源文件修订。${BODY}`, 'utf8')
+    const voided = await assessLoopState(dir)
+    expect(voided.stage).toBe('review')
+    expect(voided.gaps[0]?.detail).toContain('源指纹与当前源文件不符')
+  })
+
+  it('judges export freshness by the exporter digest sidecar when present', async () => {
+    const dir = await fullProject('sidecar-export')
+    await writeFile(join(dir, 'chapters', '08-drawings.md'), `# 附图说明\n\n无附图\n${BODY}`, 'utf8')
+    await mkdir(join(dir, 'review'), { recursive: true })
+    await writeFile(join(dir, 'review', 'project.review.md'), '总分 88\n', 'utf8')
+    await mkdir(join(dir, 'exports'), { recursive: true })
+    await writeFile(join(dir, 'exports', '测试存储装置-交底书.docx'), 'docx', 'utf8')
+    // Sidecar matches: the export gate passes even when the docx mtime is old.
+    const fingerprint = await sourceFingerprint(dir)
+    await writeFile(join(dir, 'exports', '测试存储装置-交底书.fingerprint'), fingerprint, 'utf8')
+    const stale = new Date(Date.now() - 60_000)
+    await utimes(join(dir, 'exports', '测试存储装置-交底书.docx'), stale, stale)
+    expect((await assessLoopState(dir)).stage).toBe('done')
+
+    // A source edit after the export voids the sidecar. The review gate stays
+    // green on purpose (its unstamped report gets a future mtime), isolating
+    // the export verdict to the sidecar comparison.
+    await writeFile(join(dir, 'chapters', '02-field.md'), `# 技术领域\n\n导出之后的源文件修订。${BODY}`, 'utf8')
+    const future = new Date(Date.now() + 60_000)
+    await utimes(join(dir, 'review', 'project.review.md'), future, future)
+    const voided = await assessLoopState(dir)
+    expect(voided.stage).toBe('export')
+    expect(voided.gaps[0]?.detail).toContain('源指纹与当前源文件不符')
+  })
+
+  it('names the top revision-list items as priorities in the below-threshold gap', async () => {
+    const dir = await fullProject('revision-priorities')
+    await writeFile(join(dir, 'chapters', '08-drawings.md'), `# 附图说明\n\n无附图\n${BODY}`, 'utf8')
+    await mkdir(join(dir, 'review'), { recursive: true })
+    await writeFile(
+      join(dir, 'review', 'project.review.md'),
+      [
+        '总分 62',
+        '',
+        '## 修订清单（按影响排序）',
+        '',
+        '- **有益效果**（均分 55，影响 9.0）：补一个与方案组件逐项对应的量化对比。',
+        '- **背景技术**（均分 60，影响 8.0）：给出可检索的现有技术文献描述。',
+        '- **技术方案**（均分 70，影响 6.0）：说明信号采集模块与判决模块的接口。',
+        '- **关键点**（均分 75，影响 5.0）：收敛欲保护点的范围表述。',
+      ].join('\n'),
+      'utf8',
+    )
+    const state = await assessLoopState(dir)
+    expect(state.stage).toBe('review')
+    const gap = state.gaps[0]?.detail ?? ''
+    expect(gap).toContain('低于达标线 80')
+    expect(gap).toContain('优先修订：有益效果：补一个与方案组件逐项对应的量化对比。；背景技术')
+    expect(gap).not.toContain('关键点') // top-3 cut, not the whole list
   })
 })
 

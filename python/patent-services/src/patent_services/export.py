@@ -39,6 +39,8 @@ from docx.oxml.ns import qn
 from docx.oxml.parser import OxmlElement
 from docx.shared import Cm, Pt
 
+from .fingerprint import source_fingerprint
+
 #: A Markdown chapter file's level-1 heading, or None when the file opens
 #: with other content and the filename provides the heading.
 _HEADING1 = re.compile(r"^#\s+(.+)$", re.MULTILINE)
@@ -88,6 +90,11 @@ _FIGURE_FILE = re.compile(r"^图(\d+)(?:-.+)?\.png$", re.IGNORECASE)
 #: One 附图说明 chapter line naming a figure: ``图1 为本发明所述方法的流程总览图；``
 _FIGURE_CAPTION = re.compile(r"图(\d+)\s*[为是][:：]?\s*([^；。\n]+)")
 
+#: Figure-like names at the figures root that the strict contract rejects
+#: (``图3.jpg``, ``图 4.png``) — named in the export warning because they
+#: embed nothing yet look like figures to a human.
+_FIGURE_LOOKALIKE = re.compile(r"^图\s*\d+")
+
 #: Embedded figure width on export — fits the template's text column with margin.
 FIGURE_WIDTH = Cm(14)
 
@@ -119,18 +126,91 @@ def _collect_figures(root: Path) -> list[tuple[int, Path, str | None]]:
 def _export_summary(written: str, root: Path) -> str:
     """Describe an export's embedded figure set so a silent zero-figure
     deliverable cannot pass for complete: the returned path carries the
-    collected count, plus a warning when the 附图说明 chapter declares more
-    figures than the figures root supplied."""
+    collected count, plus a warning naming exactly which declared figures are
+    missing and which files at the figures root look like figures but never
+    matched the naming contract (图3.jpg, 图 3.png — they embed nothing)."""
     figures = _collect_figures(root)
+    figures_dir = root / "figures"
     drawings = root / "chapters" / "08-drawings.md"
-    declared = 0
+    declared: set[int] = set()
     if drawings.is_file():
-        declared = len({int(m.group(1)) for m in _FIGURE_CAPTION.finditer(drawings.read_text(encoding="utf-8"))})
-    note = ""
-    if declared > len(figures):
-        note = (f"；警告：附图说明声明 {declared} 张，figures/ 根只收集到 {len(figures)} 张"
-                f"（成品须命名 图N.png 或 图N-名称.png），缺的图没有进文档")
+        declared = {int(m.group(1)) for m in _FIGURE_CAPTION.finditer(drawings.read_text(encoding="utf-8"))}
+    collected = {number for number, _, _ in figures}
+    missing = sorted(declared - collected)
+    mismatched = sorted(
+        path.name for path in figures_dir.iterdir()
+        if path.is_file() and _FIGURE_LOOKALIKE.match(path.name) and not _FIGURE_FILE.match(path.name)
+    ) if figures_dir.is_dir() else []
+    notes: list[str] = []
+    if missing:
+        notes.append(f"缺 图{'、图'.join(str(n) for n in missing)}（成品须命名 图N.png 或 图N-名称.png），缺的图没有进文档")
+    if mismatched:
+        notes.append(f"疑似附图但命名未收录：{'、'.join(mismatched)}")
+    note = "".join(f"；警告：{note}" for note in notes)
     return f"{written}（内嵌附图 {len(figures)} 张{note}）"
+
+
+#: The review score line a report carries: ``总分 81``.
+_REVIEW_SCORE = re.compile(r"总分\s*(\d+)")
+
+#: The scope stamp marking a report as partial (never the whole-project verdict).
+_REVIEW_PARTIAL = "审查范围：部分"
+
+#: The degradation marker in reference/prior-art.md that relaxes the bar.
+_PRIOR_ART_UNAVAILABLE = "查新不可用"
+
+#: Default score bar, mirroring the loop assessor's (patent.yml reviewThreshold overrides).
+_REVIEW_THRESHOLD = 80
+
+#: How far the bar drops while the prior-art search is marked unreachable.
+_DEGRADED_DELTA = 10
+
+
+def review_gate_warning(root: Path) -> str:
+    """Warn when the disclosure export goes out before the review score gate
+    passed — a soft guard, not a blocker: the loop tool stays the authority,
+    this only keeps an unreviewed export from presenting itself as final.
+
+    Mirrors the loop's rule: newest ``*.review.md`` wins, a partial-scope
+    report is no verdict, ``reviewThreshold`` in patent.yml overrides the
+    default bar, and the 查新不可用 marker relaxes it by ten.
+    """
+    review_dir = root / "review"
+    reports = sorted(review_dir.glob("*.review.md")) if review_dir.is_dir() else []
+    if not reports:
+        return "提醒：review/ 下还没有审查报告——交底书尚未过审查分数门，建议先跑 patent_review 审查达标后再交付。"
+    latest = max(reports, key=lambda path: path.stat().st_mtime)
+    text = latest.read_text(encoding="utf-8")
+    score_match = _REVIEW_SCORE.search(text)
+    if score_match is None:
+        return f"提醒：最新审查报告 {latest.name} 没有可解析的总分——重跑审查后再交付。"
+    if _REVIEW_PARTIAL in text:
+        return f"提醒：最新审查报告 {latest.name} 只覆盖局部目标——整项审查未过，交底书可能尚未达标。"
+    threshold = _REVIEW_THRESHOLD
+    manifest_path = root / "patent.yml"
+    if manifest_path.is_file():
+        manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8")) or {}
+        configured = manifest.get("reviewThreshold")
+        if isinstance(configured, (int, float)) and 0 <= configured <= 100:
+            threshold = int(configured)
+    prior_art = root / "reference" / "prior-art.md"
+    degraded = prior_art.is_file() and _PRIOR_ART_UNAVAILABLE in prior_art.read_text(encoding="utf-8")
+    effective = max(0, threshold - _DEGRADED_DELTA) if degraded else threshold
+    score = int(score_match.group(1))
+    if score < effective:
+        relaxed = "（查新不可用，已放宽 10 分）" if degraded else ""
+        return f"提醒：最新审查总分 {score} 低于达标线 {effective}{relaxed}——导出物未达审查线，建议修订重审后再交付。"
+    return ""
+
+
+def disclosure_absent_warning(root: Path) -> str:
+    """Warn when the application set exports while the disclosure (the default
+    deliverable) was never exported — the application set has its own
+    preconditions, and skipping the disclosure must be a visible choice."""
+    exports_dir = root / "exports"
+    if exports_dir.is_dir() and any(exports_dir.glob("*-交底书.docx")):
+        return ""
+    return "提醒：exports/ 下还没有交底书导出物（默认交付物）——确认跳过交底书直接导申请文件是有意推进。"
 
 
 def _add_figure(document, path: Path, number: int, caption: str | None, *, east_asia: str, size: Pt) -> None:
@@ -473,6 +553,9 @@ def _build_disclosure_docx(root: Path, exports_dir: Path, name: str, sections: l
             _add_figure(document, path, number, caption, east_asia=DISCLOSURE_FONT, size=DISCLOSURE_SIZE)
     output = exports_dir / f"{name}-交底书.docx"
     document.save(output)
+    # The loop's export gate reads this digest sidecar instead of trusting
+    # mtimes (see fingerprint.py for the cross-language contract).
+    (exports_dir / f"{name}-交底书.fingerprint").write_bytes(source_fingerprint(root).encode("ascii"))
     return str(output)
 
 
@@ -685,4 +768,5 @@ def _build_application_docx(root: Path, exports_dir: Path, name: str,
         _label_header(section, APPLICATION_HEADERS[key])
     output = exports_dir / f"{name}-申请文件.docx"
     document.save(output)
+    (exports_dir / f"{name}-申请文件.fingerprint").write_bytes(source_fingerprint(root).encode("ascii"))
     return output

@@ -95,9 +95,12 @@ const SCORE_TIER = (score: number): string => score >= 90 ? '优秀' : score >= 
  * @param scope - whether the target was the whole project root ('project') or
  * a narrower file/directory ('partial'); the loop's score gate only accepts
  * whole-project reports, so the scope is stamped into the report body.
+ * @param sourceFingerprint - the digest of the source set at review time; the
+ * loop's freshness gate compares it against the live sources instead of
+ * trusting mtimes. Absent for legacy callers (no stamp line is rendered).
  * @returns the report body (no trailing newline; the writer adds one).
  */
-export function renderReport(outcome: ReviewOutcome, fileLabel: string, scope: 'project' | 'partial' = 'partial'): string {
+export function renderReport(outcome: ReviewOutcome, fileLabel: string, scope: 'project' | 'partial' = 'partial', sourceFingerprint?: string): string {
   const lines: string[] = [
     `# 交底书审查：${fileLabel}`,
     '',
@@ -106,6 +109,7 @@ export function renderReport(outcome: ReviewOutcome, fileLabel: string, scope: '
     scope === 'project'
       ? '> 审查范围：整项（项目根）'
       : `> 审查范围：部分（${fileLabel}）——本报告不作为整项达标的依据`,
+    ...(sourceFingerprint === undefined ? [] : ['', `> 源指纹：${sourceFingerprint}`]),
     '',
     '| 维度 | 权重 | 均分 | 各次评分 | 失败次数 |',
     '| --- | --- | --- | --- | --- |',
