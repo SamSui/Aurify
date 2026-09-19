@@ -19,11 +19,23 @@
 | 审查 | `/patent-review` 七维 rubric + NLI 一致性，报告落档 |
 | 导出 | 代理机构模板交底书 + 申请文件三件套，docx/PDF，插图自动配对 |
 
-组成：**14 个技能**（撰写纪律）+ **8 个 MCP 工具**（确定性机制）+ 审查命令 + Web 结构化卡片与项目面板。Bundle 不带 persona（人格在档案补丁层，安装时会一并给出），可装入任意 dsh 档案。
+组成：**14 个技能**（撰写纪律）+ **5 个原生工具**（就绪度打分、权利要求/正文检查、全流程推进、审查直通）+ **8 个 MCP 工具**（导出/解析/渲染/检索/实验/查新，Python 服务）+ `/patent-review` 审查命令 + Web 结构化卡片与项目面板。Bundle 不带 persona（人格在档案补丁层，安装时一并装入），可装入任意 dsh 档案。
 
 ## 安装（最短路径）
 
 前置：[DeepSeek Harness 桌面版](https://github.com/hairyf/deepseek-harness-desktop)（或 dsh ≥0.1.5）；可选 uv（Python 服务）与 Docker Desktop（附图渲染、仿真实验）。
+
+**方式 A · 一键安装器（推荐）**——解包插件为目录后运行自带安装器，它自动完成建档案、写依赖 overrides、装包、装 persona 与验证，幂等可重跑：
+
+```sh
+mkdir bundle && tar -xzf dist/mtl-academic-dsh-patent-0.1.6-alpha.1.tgz -C bundle --strip-components=1
+```
+
+```powershell
+powershell -ExecutionPolicy Bypass -File dist/install-patent-profile.ps1 -Name patent-demo -DistDir <dist目录>
+```
+
+**方式 B · 手动安装**——四步走，适合不想跑脚本时：
 
 ```sh
 # 1. 解包插件为目录（桌面端必须目录形态安装）
@@ -31,24 +43,25 @@ mkdir bundle && tar -xzf dist/mtl-academic-dsh-patent-0.1.6-alpha.1.tgz -C bundl
 
 # 2. 建 profile 并写入依赖 overrides（模板见 dist/README.md）
 
-# 3. 安装 + 装 persona（bundle 包内 README 的「The persona lives in the profile」一节）
+# 3. 安装 + 装 persona（dist/persona.patch.yml 拷为档案的 cordis.patch.yml，
+#    或照 bundle README「The persona lives in the profile」一节手写）
 dsh plugin --profile patent-demo add "file:<DIST>/bundle"
 
-# 4. 可选：Python 服务（导出/检索/实验/查新的 8 个 MCP 工具）
+# 4. 可选：Python 服务（8 个 MCP 工具）
 uv tool install dist/deepseek_harness_patent_services-0.1.0-py3-none-any.whl
 # 系统环境变量 DSH_PATENT_SERVICES=1，重启桌面版
 ```
 
-完整步骤、验收方法与已知边界见 [`dist/README.md`](dist/README.md)。
+完整步骤、验收方法与已知边界见 [`dist/README.md`](dist/README.md)；安装器参数与故障排查见 [`dist/INSTALL-NEW-PROFILE.md`](dist/INSTALL-NEW-PROFILE.md)。
 
 ## 仓库结构
 
 ```text
 packages/bundle-patent/            # 能力 bundle：14 技能 + Web 卡片/面板 + MCP 行（@mtl-academic/dsh-patent）
-packages/tool-patent/              # 就绪度打分 + 权利要求检查工具
-packages/command-patent-review/    # /patent-review 确定性审查命令（七维 rubric）
-python/patent-services/            # Python MCP 服务：导出/解析/渲染/检索/实验/查新
-dist/                              # 可直接安装的 npm tarball + Python wheel + 接收方安装指南
+packages/tool-patent/              # 就绪度打分、权利要求/正文检查、全流程推进工具（@deepseek-ai/dsh-tool-patent）
+packages/command-patent-review/    # /patent-review 确定性审查命令 + patent_review 直通工具（七维 rubric）
+python/patent-services/            # Python MCP 服务：导出/解析/渲染/检索/实验/查新（8 工具）
+dist/                              # 可直接安装的 npm tarball + Python wheel + 一键安装器 + persona 补丁 + 接收方指南
 ```
 
 技术标识：npm 包 `@mtl-academic/dsh-patent`（未发布，用 `dist/` 内 tarball 安装）；Docker 镜像 `q771103517/dsh-patent`（附图渲染）与 `q771103517/dsh-patent-experiment`（仿真实验），首次使用自动拉取。

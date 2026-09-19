@@ -60,7 +60,7 @@ The canonical result is `{ covered, missing, ready, coreFilled: { done, total },
 
 ## Export shape
 
-A function plugin: it exports `name` / `inject` / `apply` and NO default. A stray `export default` would collapse the module via the Loader's `unwrapExports` and drop `inject` (see [docs/postmortem/0001](../../../docs/postmortem/0001-acp-default-export-drops-inject.md)). `inject` is `['tools', 'commands']` — the command registration rides the same plugin as the tools.
+A function plugin: it exports `name` / `inject` / `apply` and NO default. A stray `export default` would collapse the module via the Loader's `unwrapExports` and drop `inject` (see the deepseek-harness monorepo postmortem `docs/postmortem/0001`). `inject` is `['tools', 'commands']` — the command registration rides the same plugin as the tools.
 
 ## Model Experience
 
@@ -68,7 +68,7 @@ A function plugin: it exports `name` / `inject` / `apply` and NO default. A stra
 
 #### What the model sees
 
-The model sees the generated [`patent_brief_coverage` schema](../../../docs/tool-catalog.md#deepseek-aidsh-tool-patent).
+The model sees the generated `patent_brief_coverage` schema (the monorepo tool catalog, `docs/tool-catalog.md`).
 
 #### Token effect
 

@@ -2,7 +2,7 @@
 
 English | [中文](README.zh.md)
 
-MCP stdio server exposing the patent disclosure domain services to the dsh `patent` profile: template/reference parsing, whole-project export, application-set export, drawio figure rendering, archive search, docker-backed simulation experiments, and Chinese patent discovery. Mounted through [`@deepseek-ai/dsh-mcp-client`](../../packages/mcp/mcp-client/README.md), its tools reach the model as `mcp__patent__parse_disclosure_docx`, `mcp__patent__export_disclosure`, `mcp__patent__export_application_docs`, `mcp__patent__render_drawio_figure`, `mcp__patent__render_html_figure`, `mcp__patent__search_patent_archive`, `mcp__patent__run_experiment`, and `mcp__patent__search_cn_patents`.
+MCP stdio server exposing the patent disclosure domain services to the dsh `patent` profile: template/reference parsing, whole-project export, application-set export, drawio figure rendering, archive search, docker-backed simulation experiments, and Chinese patent discovery. Mounted through the dsh MCP client as the `patent-services` stdio server row, its tools reach the model as `mcp__patent__parse_disclosure_docx`, `mcp__patent__export_disclosure`, `mcp__patent__export_application_docs`, `mcp__patent__render_drawio_figure`, `mcp__patent__render_html_figure`, `mcp__patent__search_patent_archive`, `mcp__patent__run_experiment`, and `mcp__patent__search_cn_patents`.
 
 ## Tools
 
@@ -19,8 +19,8 @@ MCP stdio server exposing the patent disclosure domain services to the dsh `pate
 
 ```sh
 uv run --project python/patent-services python -m patent_services   # stdio server
-uv run --project python/patent-services pytest                      # tests
-uv build                                                            # wheel + sdist into dist/
+uv run --project python/patent-services --group test pytest python/patent-services/tests   # tests
+uv build python/patent-services                                     # wheel + sdist
 ```
 
 The wheel is the installable form: it ships the template and Dockerfile assets and a `patent-services` console script. The `patent` bundle mounts the client row with two opt-in gates, both off by default (disabled — visible in `dsh --profile patent --dump-config`, absent from the tool table): `DSH_PATENT_SERVICES` runs the installed package through `uvx --from deepseek-harness-patent-services patent-services`, while `DSH_PATENT_SERVICES_DIR` (this checkout's absolute path) runs the module straight from source.

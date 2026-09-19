@@ -6,15 +6,16 @@
 > macOS/Linux with `~` in place of `%USERPROFILE%`.
 >
 > Everything happens inside `%USERPROFILE%\.dsh\` — no admin rights, no npm
-> access needed.
+> access needed. The Chinese walkthrough of the manual install path lives in
+> [README.md](README.md).
 
 ## Prerequisites
 
 | Requirement | Notes | How to check |
 |---|---|---|
 | Desktop app installed | Provides the dsh core and the `dsh` CLI shim | `%LOCALAPPDATA%\deepseek-harness\bin\dsh.cmd --version` prints a version |
-| Release artifacts unpacked | The release contains a `bundle/` directory plus package tarballs — put them in any directory, e.g. `%USERPROFILE%\.dsh\plugin-dist\patent` | The installer's first step validates this |
-| Python services (optional) | The 8 MCP tools (export, Word parsing, figure rendering, experiments, prior-art search) | Set the user-level env var `DSH_PATENT_SERVICES_DIR` to the patent-services source directory (`setx DSH_PATENT_SERVICES_DIR <dir>`, then restart the desktop app); all profiles inherit it |
+| Release artifacts unpacked | Unpack the bundle tarball into a `bundle/` directory beside the package tarballs — `tar -xzf mtl-academic-dsh-patent-*.tgz -C bundle --strip-components=1` — and put them in any directory, e.g. `%USERPROFILE%\.dsh\plugin-dist\patent` | The installer's first step validates this |
+| Python services (optional) | The 8 MCP tools (export, Word parsing, figure rendering, experiments, prior-art search) | Either gate works: install the shipped wheel (`uv tool install deepseek_harness_patent_services-*.whl`) and set user-level `DSH_PATENT_SERVICES=1`, or set `DSH_PATENT_SERVICES_DIR` to a patent-services source checkout (`setx DSH_PATENT_SERVICES_DIR <dir>`); either way restart the desktop app afterwards, and all profiles inherit it |
 | Docker Desktop (optional) | Only for simulation experiments and drawio figure rendering | Start it manually when needed |
 
 ## Quick install (recommended)
@@ -42,7 +43,10 @@ When it prints `DONE`, **fully quit and relaunch the desktop app**, pick the new
 ├─ deepseek-ai-dsh-command-patent-review-<version>.tgz
 ├─ deepseek-ai-schemastery-<version>.tgz          # the registry only carries the 3.18.x line; the bundle builds against the vendored fork
 ├─ deepseek-ai-cosmokit-<version>.tgz
-└─ persona.patch.yml                              # the persona as a ready profile patch (optional but recommended)
+├─ persona.patch.yml                              # the persona as a ready profile patch (optional but recommended)
+├─ deepseek_harness_patent_services-<version>.whl # optional Python services (uv tool install + DSH_PATENT_SERVICES=1)
+├─ install-patent-profile.ps1                     # the quick-install script this guide documents
+└─ README.md                                      # the Chinese receiver guide (manual walkthrough)
 ```
 
 ### 2. Initialize the profile and declare the bundle
@@ -123,7 +127,7 @@ Check three things: the `tool-patent` / `patent-assets` / `command-patent-review
 | Capability | Entry point | Needs |
 |---|---|---|
 | Idea assessment, five-party interview, chapter drafting, review, export — the whole pipeline | Just ask in a session, or `/patent-loop`, `/patent-review` | nothing |
-| Disclosure/application export, Word reference parsing | MCP tools, invoked by the model | `DSH_PATENT_SERVICES_DIR` |
+| Disclosure/application export, Word reference parsing | MCP tools, invoked by the model | a Python-services gate: `DSH_PATENT_SERVICES=1` (installed wheel) or `DSH_PATENT_SERVICES_DIR` (source checkout) |
 | Simulation experiments, drawio/HTML figure rendering | MCP tools, invoked by the model | the above + Docker Desktop |
 | Chinese prior-art discovery | `search_cn_patents` (model-invoked) | network access to patents.google.com (a proxy is the usual route) |
 
@@ -137,6 +141,6 @@ Drop the new release's tarballs and `bundle/` over the dist directory, then re-r
 |---|---|
 | The plugin vanishes after a desktop relaunch; log shows `DANGLING_LINK_UNINSTALLING` | The bundle was installed tarball-shaped. Delete the profile and reinstall — step 2 must target the `bundle` directory |
 | `ERR_PNPM_WORKSPACE_PKG_NOT_FOUND` (workspace:^) | The overrides block is missing or its paths are wrong. Check the 4 `overrides:` lines against the tarballs actually present |
-| The model cannot see the export/render tools | `DSH_PATENT_SERVICES_DIR` not set (user level), or the desktop app was not restarted after setting it |
+| The model cannot see the export/render tools | Neither Python-services gate is set at user level — `DSH_PATENT_SERVICES=1` (installed wheel) or `DSH_PATENT_SERVICES_DIR` (source checkout) — or the desktop app was not restarted after setting it |
 | Review reports "model not found" / auth errors | Pick a GLM model from the `zai-coding-cn` group in the session; the default deepseek line through a GLM gateway fails with "model not found" |
 | A review dimension reports all scoring passes failed | Gateway rate limiting. The scripted review batches, backs off, and retries; running `patent_review` once more usually recovers the dimension |

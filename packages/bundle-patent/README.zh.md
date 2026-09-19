@@ -9,7 +9,7 @@ kind: "package-bundle"
 
 ## 概述
 
-叠加在 [`dsh-base`](../base/README.zh.md) 之上的个人发明交底书撰写层，与 web app 一起组成 `patent` profile 的第三层 bundle。[`cordis.patch.yml`](cordis.patch.yml) 插入本特性的各行：[`tool-patent`](../../patent/tool-patent/README.zh.md) 覆盖率打分器、本包的 `patent-assets` 插件（把随包分发的 `skills/` 资产注册为 runtime skill）、[`command-patent-review`](../../patent/command-patent-review/README.zh.md) 确定性审查命令，以及按环境变量门控的 [`patent-services`](../../../python/patent-services/README.zh.md) MCP 行。本 bundle 刻意不带 persona——助手 persona 属于 profile 层——因此任何 profile 都可以携带这套能力。撰写模型是文件优先：一个交底书项目就是一个 Markdown 文件目录，agent 经 base 的文件工具维护它们，用户直接编辑同一批文件。本 bundle 的产品名是「点金」：不是每块石头都值得点——先验金，再点金，动笔之前先判断点子值不值得写。
+叠加在 dsh base bundle 之上的个人发明交底书撰写层，与 web app 一起组成 `patent` profile 的第三层 bundle。[`cordis.patch.yml`](cordis.patch.yml) 插入本特性的各行：[`tool-patent`](../tool-patent/README.zh.md) 覆盖率打分器、本包的 `patent-assets` 插件（把随包分发的 `skills/` 资产注册为 runtime skill）、[`command-patent-review`](../command-patent-review/README.zh.md) 确定性审查命令，以及按环境变量门控的 [`patent-services`](../../python/patent-services/README.zh.md) MCP 行。本 bundle 刻意不带 persona——助手 persona 属于 profile 层——因此任何 profile 都可以携带这套能力。撰写模型是文件优先：一个交底书项目就是一个 Markdown 文件目录，agent 经 base 的文件工具维护它们，用户直接编辑同一批文件。本 bundle 的产品名是「点金」：不是每块石头都值得点——先验金，再点金，动笔之前先判断点子值不值得写。
 
 ## 目录
 
@@ -28,7 +28,7 @@ kind: "package-bundle"
 
 ### 安装进 profile
 
-已验证的安装路径——发布的 bundle 把 [`tool-patent`](../../patent/tool-patent/README.zh.md) 与 [`command-patent-review`](../../patent/command-patent-review/README.zh.md) 作为自身依赖携带，一条安装命令带来整个特性：
+已验证的安装路径——发布的 bundle 把 [`tool-patent`](../tool-patent/README.zh.md) 与 [`command-patent-review`](../command-patent-review/README.zh.md) 作为自身依赖携带，一条安装命令带来整个特性：
 
 ```text
 dsh --profile patent --from-default-profile web
@@ -69,17 +69,17 @@ dsh plugin --profile patent add @mtl-academic/dsh-patent
 
 -----
 
-<a id="the-mcp-services-row"></a>
-
 <a id="the-discussion-sampling-default"></a>
 
 ## 讨论采样默认值
 
 资产载体把 0.7 的采样温度钉在该 profile 的顶层会话上：撰写交底书是创造性对话，接近确定性的采样会让行文发干。被委托的子会话带有持久的 subagent origin 标记而被跳过，因此审查链路自己的评分温度（0.2，见审查命令的 README）和用户派生的每个子代理都不受影响。在请求载荷尚未注入主体（subject）的旧核心上，该覆盖完全不生效，绝不靠猜。
 
+<a id="the-mcp-services-row"></a>
+
 ## MCP services 行
 
-patch 插入 [`dsh-mcp-client`](../../mcp/mcp-client/README.zh.md) 行，承载 [`patent-services`](../../../python/patent-services/README.zh.md) stdio 服务（`serverName: patent`——`parse_disclosure_docx`、`export_disclosure`、`export_application_docs`、`render_drawio_figure`、`render_html_figure`、`search_patent_archive`、`run_experiment` 与 `search_cn_patents`）。两种 opt-in 模式，默认都关闭，未设置时该行保持 disabled（在 `--dump-config` 中可见，不在工具表）：设 `DSH_PATENT_SERVICES` 经 `uvx` 运行已安装的包（发布的 wheel，或本地 `uv build` + `uv tool install` 的产物）；或设 `DSH_PATENT_SERVICES_DIR` 指向源码检出，直接从该目录运行模块。任一方式下，模型在下一次启动时获得解析、导出、渲染、检索、实验与专利发现工具。
+patch 插入 dsh `mcp-client` 行，承载 [`patent-services`](../../python/patent-services/README.zh.md) stdio 服务（`serverName: patent`——`parse_disclosure_docx`、`export_disclosure`、`export_application_docs`、`render_drawio_figure`、`render_html_figure`、`search_patent_archive`、`run_experiment` 与 `search_cn_patents`）。两种 opt-in 模式，默认都关闭，未设置时该行保持 disabled（在 `--dump-config` 中可见，不在工具表）：设 `DSH_PATENT_SERVICES` 经 `uvx` 运行已安装的包（发布的 wheel，或本地 `uv build` + `uv tool install` 的产物）；或设 `DSH_PATENT_SERVICES_DIR` 指向源码检出，直接从该目录运行模块。任一方式下，模型在下一次启动时获得解析、导出、渲染、检索、实验与专利发现工具。
 
 <a id="skills-delivery"></a>
 ## Skills 分发
@@ -97,7 +97,7 @@ patch 插入 [`dsh-mcp-client`](../../mcp/mcp-client/README.zh.md) 行，承载 
 
 #### Token effect
 
-在 patent profile 中，persona 的固定文本是每个请求的开销；目录提醒随已注册 skill 数量增长（仅名称与截断描述）。仅装能力的 profile 只增加目录提醒与两个工具的 schema。覆盖率工具的 schema 开销在其[自己的 README](../../patent/tool-patent/README.zh.md) 中说明。
+在 patent profile 中，persona 的固定文本是每个请求的开销；目录提醒随已注册 skill 数量增长（仅名称与截断描述）。仅装能力的 profile 只增加目录提醒与两个工具的 schema。覆盖率工具的 schema 开销在其[自己的 README](../tool-patent/README.zh.md) 中说明。
 
 #### KV Cache effect
 

@@ -66,7 +66,7 @@ kind: "package-reference"
 <a id="export-shape"></a>
 ## 导出形态
 
-函数插件：只导出 `name` / `inject` / `apply`，禁止 default export。多余的 `export default` 会被 Loader 的 `unwrapExports` 折叠模块并丢掉 `inject`（见 [docs/postmortem/0001](../../../docs/postmortem/0001-acp-default-export-drops-inject.zh.md)）。`inject` 为 `['tools', 'commands']`——命令注册与工具同插件。
+函数插件：只导出 `name` / `inject` / `apply`，禁止 default export。多余的 `export default` 会被 Loader 的 `unwrapExports` 折叠模块并丢掉 `inject`（见 deepseek-harness monorepo 文档的 postmortem `docs/postmortem/0001`）。`inject` 为 `['tools', 'commands']`——命令注册与工具同插件。
 
 <a id="model-experience"></a>
 ## Model Experience
@@ -75,7 +75,7 @@ kind: "package-reference"
 
 #### What the model sees
 
-模型看到生成的 [`patent_brief_coverage` schema](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-patent)。
+模型看到生成的 `patent_brief_coverage` schema（monorepo 工具目录 `docs/tool-catalog.zh.md`）。
 
 #### Token effect
 
@@ -103,7 +103,7 @@ kind: "package-reference"
 ## Known Limitations and Deferred Work
 
 - **工具只对传入内容打分**——维度内容由模型从其上下文提供；模型可能提交删减版 brief 而得到误导性 `ready`。`patent-init` skill 的程序约束这一点，审查引擎会对落盘文件复查。
-- **不支持路径输入**——两个纯函数工具接收文本而非 `brief.md` 路径；读文件先经 `fs` 工具完成，本包因此不沾文件系统策略（loop 工具对是刻意的例外：它自己读项目状态，判定才不会被模型提交的内容左右）。
+- **不支持路径输入**——两个纯函数工具接收文本而非 `brief.md` 路径；读文件先经 `fs` 工具完成，本包因此不沾文件系统策略（loop 的工具+命令这对是刻意例外：它们自己读项目状态，判定才不会被模型提交的内容左右）。
 - **循环的 brief 与效果章启发式只判存在性**——标题下有非空正文即过 align，效果章出现任一「数字+单位」即触发 experiments 关卡；内容单薄与数字无据是各技能与审查引擎的职责，不是评估器的。
 
 <a id="dev-note"></a>
