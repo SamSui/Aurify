@@ -1,65 +1,69 @@
-# 点金（dsh-patent）新档案安装指南
+# Aurify (dsh-patent) — installing into a new dsh profile
 
-> 适用：Deepseek Harness Desktop（Tauri 桌面端）已安装的 Windows 机器。
-> 目标：在一个**全新的 dsh 档案**里装好「点金 Aurify」专利撰写插件，不影响既有档案。
-> 全程约 1 分钟（脚本路径）；网络不需要访问 npm。
+> Audience: anyone with the Deepseek Harness Desktop (Tauri) app installed who
+> wants the Aurify patent-writing plugin in a **fresh dsh profile**, without
+> touching existing profiles. Windows paths below; the same layout works on
+> macOS/Linux with `~` in place of `%USERPROFILE%`.
+>
+> Everything happens inside `%USERPROFILE%\.dsh\` — no admin rights, no npm
+> access needed.
 
-## 前置条件
+## Prerequisites
 
-| 条件 | 说明 | 检查方法 |
+| Requirement | Notes | How to check |
 |---|---|---|
-| 桌面端已安装 | 自带 dsh 核心与 dsh CLI shim | `%LOCALAPPDATA%\deepseek-harness\bin\dsh.cmd --version` 有输出 |
-| 分发物在位 | `C:\Users\77110\.dsh\plugin-dist\patent\` 下有 `bundle\` 目录 + 5 个 tgz | 脚本第 1 步会自动校验 |
-| Python 服务（可选） | 导出/渲染/实验/查新 8 个 MCP 工具 | 用户级环境变量 `DSH_PATENT_SERVICES_DIR` 指向 patent-services 源码目录（`setx DSH_PATENT_SERVICES_DIR <目录>`，设完重启桌面端）；已设置则所有档案自动继承 |
-| Docker（可选） | 仅跑实验与 drawio 渲染需要 | 用到时手动启动 Docker Desktop 即可 |
+| Desktop app installed | Provides the dsh core and the `dsh` CLI shim | `%LOCALAPPDATA%\deepseek-harness\bin\dsh.cmd --version` prints a version |
+| Release artifacts unpacked | The release contains a `bundle/` directory plus package tarballs — put them in any directory, e.g. `%USERPROFILE%\.dsh\plugin-dist\patent` | The installer's first step validates this |
+| Python services (optional) | The 8 MCP tools (export, Word parsing, figure rendering, experiments, prior-art search) | Set the user-level env var `DSH_PATENT_SERVICES_DIR` to the patent-services source directory (`setx DSH_PATENT_SERVICES_DIR <dir>`, then restart the desktop app); all profiles inherit it |
+| Docker Desktop (optional) | Only for simulation experiments and drawio figure rendering | Start it manually when needed |
 
-## 快速安装（推荐）
+## Quick install (recommended)
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File C:\Users\77110\.dsh\plugin-dist\patent\install-patent-profile.ps1 -Name <新档案名>
+powershell -ExecutionPolicy Bypass -File <dist-directory>\install-patent-profile.ps1 -Name patent-test
 ```
 
-- `-Name`：新档案名，如 `patent-test`。默认 `patent-test`。
-- `-PersonaFrom patent`（默认）：从既有 `patent` 档案复制「点金」persona（12 条纪律）。没有参考档案时传 `-PersonaFrom ""`，随后按 [persona 安装](#persona-为什么单独装) 手工补。
-- 幂等：对已存在的档案重复运行安全（重写清单、补 overrides、重装、跳过已装 persona）。
+- `-Name <name>` — the new profile's name (created under `%USERPROFILE%\.dsh\profiles\<name>`). Default `patent-test`.
+- `-DistDir <dir>` — where you unpacked the release. Default `%USERPROFILE%\.dsh\plugin-dist\patent`.
+- `-PersonaFrom auto` (default) — installs the persona from a shipped `persona.patch.yml` in the dist directory; with `-PersonaFrom <existing-profile>` it copies that profile's patch instead; `-PersonaFrom ""` skips.
+- Idempotent — re-running on an existing profile refreshes it in place.
 
-脚本结束后**完全退出并重启桌面端**，在档案列表选择新档案名即可。
+When it prints `DONE`, **fully quit and relaunch the desktop app**, pick the new profile, and open a session in a patent project directory.
 
-## 手动安装（脚本做的事，逐步）
+## Manual install (what the script does, step by step)
 
-以下每一步都对应脚本里的一个环节；想理解或手工操作时照此执行。
-
-### 1. 校验分发物
+### 1. Validate the dist layout
 
 ```
-C:\Users\77110\.dsh\plugin-dist\patent\
-├─ bundle\                                        # @mtl-academic/dsh-patent（目录形态，14 个技能在内）
-├─ mtl-academic-dsh-patent-0.1.6-alpha.1.tgz
-├─ deepseek-ai-dsh-tool-patent-0.1.6-alpha.1.tgz
-├─ deepseek-ai-dsh-command-patent-review-0.1.6-alpha.1.tgz
-├─ deepseek-ai-schemastery-3.18.2.tgz             # registry 只有 3.18.x 线，bundle 按 vendored fork 构建
-└─ deepseek-ai-cosmokit-1.8.3.tgz
+<dist-dir>\
+├─ bundle\                                        # @mtl-academic/dsh-patent (directory form; the 14 skills live here)
+├─ mtl-academic-dsh-patent-<version>.tgz
+├─ deepseek-ai-dsh-tool-patent-<version>.tgz
+├─ deepseek-ai-dsh-command-patent-review-<version>.tgz
+├─ deepseek-ai-schemastery-<version>.tgz          # the registry only carries the 3.18.x line; the bundle builds against the vendored fork
+├─ deepseek-ai-cosmokit-<version>.tgz
+└─ persona.patch.yml                              # the persona as a ready profile patch (optional but recommended)
 ```
 
-### 2. 初始化档案并声明 bundle
+### 2. Initialize the profile and declare the bundle
 
 ```cmd
-dsh plugin --profile <名称> add file:C:/Users/77110/.dsh/plugin-dist/patent/bundle
+dsh plugin --profile <name> add file:<dist-dir>/bundle
 ```
 
-- **必须是目录（file: 指到目录），绝不能 file: 指 tgz**——桌面端自愈机制对清单里的 `file:`/`link:` 依赖检查目标是否为目录，tarball 会被判定悬空并在每次启动时卸载插件。
-- 这一步会初始化档案（`dsh.profile.bundles` + `patchReload: live`），但 pnpm 解析 bundle 的内部依赖（`workspace:^`，未发布到 npm）**会报错退出——预期行为**，第 3、4 步修复。
+- **The `file:` target must be the DIRECTORY, never the tgz** — the desktop app's self-heal resolves every `file:`/`link:` dependency in a profile manifest and uninstalls ones that are not directories. A tarball-shaped install disappears on the next launch.
+- This initializes the profile (`dsh.profile.bundles` + `patchReload: live`). The pnpm leg **fails on the bundle's internal `workspace:^` dependencies (they are not published to npm) — expected**; steps 4–5 repair it.
 
-### 3. 写 `<档案目录>\package.json`
+### 3. Write `<profile-dir>\package.json`
 
-把 bundle 以**目录依赖**声明，并把 bundle 栈补成三层：
+Declare the bundle as a directory dependency and complete the bundle stack:
 
 ```json
 {
-  "name": "dsh-profile-<名称>",
+  "name": "dsh-profile-<name>",
   "private": true,
   "dependencies": {
-    "@mtl-academic/dsh-patent": "file:C:/Users/77110/.dsh/plugin-dist/patent/bundle"
+    "@mtl-academic/dsh-patent": "file:<dist-dir>/bundle"
   },
   "dsh": {
     "profile": {
@@ -70,9 +74,9 @@ dsh plugin --profile <名称> add file:C:/Users/77110/.dsh/plugin-dist/patent/bu
 }
 ```
 
-### 4. 写 `<档案目录>\pnpm-workspace.yaml`（overrides）
+### 4. Write `<profile-dir>\pnpm-workspace.yaml` (overrides)
 
-内部包未发布到 npm，用 pnpm overrides 顶替 registry 解析（**pnpm 11 只读这份 yaml 的 overrides，package.json 里的 pnpm 字段无效**）：
+The internal packages are not on npm; pnpm overrides point them at the local tarballs (**pnpm 11 reads overrides from this yaml only — a `pnpm` field in package.json is ignored**):
 
 ```yaml
 packages:
@@ -82,57 +86,57 @@ nodeLinker: hoisted
 autoInstallPeers: false
 
 overrides:
-  '@deepseek-ai/dsh-tool-patent': file:C:/Users/77110/.dsh/plugin-dist/patent/deepseek-ai-dsh-tool-patent-0.1.6-alpha.1.tgz
-  '@deepseek-ai/dsh-command-patent-review': file:C:/Users/77110/.dsh/plugin-dist/patent/deepseek-ai-dsh-command-patent-review-0.1.6-alpha.1.tgz
-  '@deepseek-ai/schemastery': file:C:/Users/77110/.dsh/plugin-dist/patent/deepseek-ai-schemastery-3.18.2.tgz
-  '@deepseek-ai/cosmokit': file:C:/Users/77110/.dsh/plugin-dist/patent/deepseek-ai-cosmokit-1.8.3.tgz
+  '@deepseek-ai/dsh-tool-patent': file:<dist-dir>/deepseek-ai-dsh-tool-patent-<version>.tgz
+  '@deepseek-ai/dsh-command-patent-review': file:<dist-dir>/deepseek-ai-dsh-command-patent-review-<version>.tgz
+  '@deepseek-ai/schemastery': file:<dist-dir>/deepseek-ai-schemastery-<version>.tgz
+  '@deepseek-ai/cosmokit': file:<dist-dir>/deepseek-ai-cosmokit-<version>.tgz
 ```
 
-### 5. 落盘安装
+### 5. Install
 
 ```cmd
-dsh plugin --profile <名称> install
+dsh plugin --profile <name> install
 ```
 
-成功标志：pnpm `Done`，`node_modules` 下出现 `@mtl-academic/dsh-patent` 与 `@deepseek-ai/{dsh-tool-patent,dsh-command-patent-review,schemastery,cosmokit}`。
+Success: pnpm prints `Done`, and `node_modules` under the profile contains `@mtl-academic/dsh-patent` plus `@deepseek-ai/{dsh-tool-patent,dsh-command-patent-review,schemastery,cosmokit}`.
 
-### 6. 装 persona（点金人格）
+### 6. Install the persona
 
-bundle 刻意不带 persona（能力层可装任意档案）。把参考档案的补丁层复制过去：
+The bundle ships **persona-free on purpose** (it is a capability layer any profile can mount). The persona lives in the profile's patch layer:
 
 ```powershell
-Copy-Item ~\.dsh\profiles\patent\cordis.patch.yml ~\.dsh\profiles\<名称>\cordis.patch.yml
+Copy-Item <dist-dir>\persona.patch.yml %USERPROFILE%\.dsh\profiles\<name>\cordis.patch.yml
 ```
 
-persona 正本（12 条纪律的全文）在 bundle README 的「The persona lives in the profile」一节；没有参考档案就照它手工写 `cordis.patch.yml` 的 `system-prompt.config.persona`。**没有 persona，模型没有把关人行为**（不会主动评估点子、不会按纪律路由技能）。
+The canonical text is also documented in the bundle README ("The persona lives in the profile") — hand-write `cordis.patch.yml`'s `system-prompt.config.persona` from it if you prefer. **Without the persona the assistant has no gatekeeper behavior**: it will not assess ideas before drafting, route through the skills, or push back with publication numbers.
 
-### 7. 验证
+### 7. Verify
 
 ```cmd
-dsh --profile <名称> --dump-config
+dsh --profile <name> --dump-config
 ```
 
-检查三点：`tool-patent` / `patent-assets` / `command-patent-review` / `mcp-patent-services` 四行在；`persona:` 出现一次；启动日志无 `DANGLING`/`UNINSTALLING`（出现即说明第 2 步没做成目录形态）。`workflow-ptc not found` 之类的 warning 是双核兼容窗口的正常 no-op，可忽略。
+Check three things: the `tool-patent` / `patent-assets` / `command-patent-review` / `mcp-patent-services` rows are present; a `persona:` key appears; the log shows no `DANGLING`/`UNINSTALLING` lines (those mean step 2 was not directory-shaped). `workflow-ptc not found`-style warnings are benign cross-core no-ops.
 
-## 安装后能做什么
+## What you get
 
-| 能力 | 入口 | 依赖 |
+| Capability | Entry point | Needs |
 |---|---|---|
-| 点子评估 / 五方访谈 / 章节撰写 / 审查 / 导出全流程 | 会话里直接说，或 `/patent-loop`、`/patent-review` | 无 |
-| 交底书/申请文件导出、Word 解析 | MCP 工具自动调用 | `DSH_PATENT_SERVICES_DIR` |
-| 实验仿真、drawio/HTML 附图渲染 | MCP 工具自动调用 | 上者 + Docker Desktop |
-| 中国专利查新 | `search_cn_patents`（模型自动调） | 网络可达 patents.google.com（代理） |
+| Idea assessment, five-party interview, chapter drafting, review, export — the whole pipeline | Just ask in a session, or `/patent-loop`, `/patent-review` | nothing |
+| Disclosure/application export, Word reference parsing | MCP tools, invoked by the model | `DSH_PATENT_SERVICES_DIR` |
+| Simulation experiments, drawio/HTML figure rendering | MCP tools, invoked by the model | the above + Docker Desktop |
+| Chinese prior-art discovery | `search_cn_patents` (model-invoked) | network access to patents.google.com (a proxy is the usual route) |
 
-## 升级/刷新
+## Upgrading
 
-插件出新版后：把新 tarball 覆盖进 `plugin-dist\patent\`、新 bundle 覆盖 `plugin-dist\patent\bundle\`，然后**重跑一遍安装脚本**（或 `dsh plugin --profile <名称> install --force`）。注意 pnpm 对同名版本 tarball 做完整性校验，内容变了的 tarball 直接 install 会被拒——脚本路径会重新写 overrides 并强制重装，可绕开该问题。Python 服务指源码目录时改源码即生效，无需重装。
+Drop the new release's tarballs and `bundle/` over the dist directory, then re-run the installer (it re-resolves the tarball names by pattern and reinstalls). Note that pnpm integrity-checks same-version tarballs — after replacing a tarball in place, delete the `overrides:` block in the profile's `pnpm-workspace.yaml` (or just re-run the installer, which rewrites the manifest and forces a reinstall). The Python services run from their source directory, so updating that directory is enough — no reinstall.
 
-## 故障排查
+## Troubleshooting
 
-| 症状 | 原因与处理 |
+| Symptom | Cause and fix |
 |---|---|
-| 桌面端启动后插件消失，日志有 `DANGLING_LINK_UNINSTALLING` | bundle 被装成了 tgz 形态。删掉档案重装，第 2 步务必指到 `bundle` 目录 |
-| `ERR_PNPM_WORKSPACE_PKG_NOT_FOUND`（workspace:^） | overrides 没写或路径不对。检查 `pnpm-workspace.yaml` 的 4 行 overrides 与 tgz 是否在位 |
-| 导出/渲染工具模型看不到 | `DSH_PATENT_SERVICES_DIR` 未设（用户级），或设后没重启桌面端 |
-| 审查报"模型不存在/401" | 会话模型选 `zai-coding-cn` 组的 GLM 系列；默认 deepseek 线经 GLM 网关会模型不存在 |
-| 审查某维度全部失败 | 网关限流。脚本化的审查会分批+退避+补跑，重跑一次 `patent_review` 通常恢复 |
+| The plugin vanishes after a desktop relaunch; log shows `DANGLING_LINK_UNINSTALLING` | The bundle was installed tarball-shaped. Delete the profile and reinstall — step 2 must target the `bundle` directory |
+| `ERR_PNPM_WORKSPACE_PKG_NOT_FOUND` (workspace:^) | The overrides block is missing or its paths are wrong. Check the 4 `overrides:` lines against the tarballs actually present |
+| The model cannot see the export/render tools | `DSH_PATENT_SERVICES_DIR` not set (user level), or the desktop app was not restarted after setting it |
+| Review reports "model not found" / auth errors | Pick a GLM model from the `zai-coding-cn` group in the session; the default deepseek line through a GLM gateway fails with "model not found" |
+| A review dimension reports all scoring passes failed | Gateway rate limiting. The scripted review batches, backs off, and retries; running `patent_review` once more usually recovers the dimension |
