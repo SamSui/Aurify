@@ -9,13 +9,21 @@ simulation runs with an automatic run log), and ``search_cn_patents``
 (Chinese patent discovery). Run with ``python -m patent_services`` (stdio
 transport, one instance per profile; see the dsh-mcp-client README for the
 cordis.yml wiring).
+
+Every tool wraps in :func:`fail_loud`: the SDK swallows a non-ToolError
+exception into a bare "Error executing tool <name>" with no cause text, which
+leaves the model guessing (the real case: a dead search channel reported
+without the proxy remedy the exception carried). Raising ToolError keeps the
+domain message — remedies, causes, next steps — intact on the wire.
 """
 
 from __future__ import annotations
 
+import functools
 from pathlib import Path
 
 from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver.exceptions import ToolError
 
 from . import experiments
 from .export import (
@@ -33,7 +41,26 @@ from .search import search_archive
 mcp = MCPServer("patent")
 
 
+def fail_loud(tool):
+    """Re-raise a tool's domain exceptions as ``ToolError`` so the message —
+    the fail-loud remedy, the underlying cause — reaches the model verbatim.
+    Anything the SDK would classify as an anticipated failure keeps its text;
+    genuine bugs still surface as the SDK's unexpected-failure form."""
+
+    @functools.wraps(tool)
+    def wrapper(*args, **kwargs):
+        try:
+            return tool(*args, **kwargs)
+        except ToolError:
+            raise
+        except (RuntimeError, ValueError, OSError) as exc:
+            raise ToolError(f"{type(exc).__name__}: {exc}") from exc
+
+    return wrapper
+
+
 @mcp.tool()
+@fail_loud
 def parse_disclosure_docx(path: str, output_path: str | None = None) -> str:
     """Parse a Word disclosure/reference document into Markdown (three-level numbering).
 
@@ -50,6 +77,7 @@ def parse_disclosure_docx(path: str, output_path: str | None = None) -> str:
 
 
 @mcp.tool()
+@fail_loud
 def export_disclosure(project_dir: str, fmt: str = "docx") -> str:
     """Export a patent project directory (patent.yml + brief.md + chapters/) to docx or pdf.
 
@@ -78,6 +106,7 @@ def export_disclosure(project_dir: str, fmt: str = "docx") -> str:
 
 
 @mcp.tool()
+@fail_loud
 def export_application_docs(project_dir: str, fmt: str = "docx") -> str:
     """Export the application document set (application/claims.md, description.md, abstract.md) to docx or pdf.
 
@@ -104,6 +133,7 @@ def export_application_docs(project_dir: str, fmt: str = "docx") -> str:
 
 
 @mcp.tool()
+@fail_loud
 def render_drawio_figure(source: str, fmt: str = "png") -> str:
     """Render one drawio figure source to png/pdf/svg/jpg.
 
@@ -127,6 +157,7 @@ def render_drawio_figure(source: str, fmt: str = "png") -> str:
 
 
 @mcp.tool()
+@fail_loud
 def render_html_figure(source: str, fmt: str = "png") -> str:
     """Rasterize one self-contained HTML figure (diagram-design output) to png/jpg beside it.
 
@@ -145,6 +176,7 @@ def render_html_figure(source: str, fmt: str = "png") -> str:
 
 
 @mcp.tool()
+@fail_loud
 def run_experiment(project_dir: str, experiment: str, command: str = "python run.py", timeout_seconds: int = 1800) -> str:
     """Run one simulation experiment in the docker runner and record it in the run log.
 
@@ -174,6 +206,7 @@ def run_experiment(project_dir: str, experiment: str, command: str = "python run
 
 
 @mcp.tool()
+@fail_loud
 def search_patent_archive(query: str, archive_dir: str, limit: int = 8) -> str:
     """Search an archive of Markdown files (past projects, reference docs) for prior writing.
 
@@ -195,6 +228,7 @@ def search_patent_archive(query: str, archive_dir: str, limit: int = 8) -> str:
 
 
 @mcp.tool()
+@fail_loud
 def search_cn_patents(query: str, limit: int = 10, since_year: int | None = None) -> str:
     """Discover Chinese patents on Google Patents for prior-art and background research.
 
