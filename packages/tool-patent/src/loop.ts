@@ -27,6 +27,18 @@ const CHAPTER_FILES = [
 /** A chapter counts as drafted once its trimmed body reaches this length. */
 const CHAPTER_MIN_CHARS = 20
 
+/** The default total score a review report must reach before the loop may finish. */
+const DEFAULT_REVIEW_THRESHOLD = 80
+
+/** How far the score bar drops while the prior-art search is unreachable. */
+const DEGRADED_REVIEW_DELTA = 10
+
+/** The overall score line a review report carries: `总分 81`. */
+const REPORT_SCORE = /总分\s*(\d+)/
+
+/** The degradation marker the research skill writes when the search is unreachable. */
+const PRIOR_ART_UNAVAILABLE = /查新不可用/
+
 /** One pending requirement found by the assessment pass. */
 export interface LoopGap {
   /** The stage whose completion this gap belongs to. */
@@ -89,21 +101,27 @@ async function mtimeOf(path: string): Promise<number> {
 }
 
 /**
- * Parse the two manifest fields the loop keys on (`name`, `status`) without
- * pulling in a YAML dependency — patent.yml is model-generated with a flat,
- * known shape.
+ * Parse the manifest fields the loop keys on (`name`, `status`, and the
+ * optional `reviewThreshold` score bar) without pulling in a YAML dependency —
+ * patent.yml is model-generated with a flat, known shape.
  * @param root - the project directory.
  * @returns the manifest fields, or undefined when the file is missing.
  */
-async function readManifest(root: string): Promise<{ name?: string; status?: string } | undefined> {
+async function readManifest(root: string): Promise<{ name?: string; status?: string; reviewThreshold?: number } | undefined> {
   const text = await readText(join(root, 'patent.yml'))
   if (text === undefined) return undefined
-  const fields: { name?: string; status?: string } = {}
+  const fields: { name?: string; status?: string; reviewThreshold?: number } = {}
   for (const line of text.split(/\r?\n/)) {
-    const match = /^(name|status):\s*(.+?)\s*$/.exec(line)
+    const match = /^(name|status|reviewThreshold):\s*(.+?)\s*$/.exec(line)
     const key = match?.[1]
     const value = match?.[2]
-    if (key !== undefined && value !== undefined) fields[key as 'name' | 'status'] = value
+    if (key === undefined || value === undefined) continue
+    if (key === 'reviewThreshold') {
+      const threshold = Number(value)
+      if (Number.isFinite(threshold) && threshold >= 0 && threshold <= 100) fields.reviewThreshold = threshold
+    } else {
+      fields[key as 'name' | 'status'] = value
+    }
   }
   return fields
 }
@@ -215,11 +233,60 @@ async function experimentsGap(root: string): Promise<string | undefined> {
  * @param root - the project directory.
  * @returns the unmet review requirement, or undefined when satisfied.
  */
-async function reviewGap(root: string): Promise<string | undefined> {
+/** The newest source mtime the review and export gates measure freshness against. */
+async function newestSourceTime(root: string): Promise<number> {
+  let newest = 0
+  for (const dir of ['chapters', 'figures']) {
+    const dirPath = join(root, dir)
+    if (!await exists(dirPath)) continue
+    for (const entry of await readdir(dirPath, { withFileTypes: true })) {
+      if (!entry.isFile()) continue
+      newest = Math.max(newest, await mtimeOf(join(dirPath, entry.name)))
+    }
+  }
+  return Math.max(newest, await mtimeOf(join(root, 'brief.md')))
+}
+
+/**
+ * Whether the review stage is satisfied: the NEWEST rubric report carries a
+ * parsed total score at or above the effective threshold, and is not older
+ * than the sources it reviewed. One report is the verdict — the latest
+ * review always replaces the previous one, so a stale passing score can
+ * never mask a fresh failing one.
+ * @param root - the project directory.
+ * @param effectiveThreshold - the score bar after any degradation relaxation.
+ * @param degraded - whether the prior-art marker relaxed the threshold.
+ * @returns the unmet review requirement, or undefined when satisfied.
+ */
+async function reviewGap(root: string, effectiveThreshold: number, degraded: boolean): Promise<string | undefined> {
   const reviewDir = join(root, 'review')
   if (!await exists(reviewDir)) return 'review/ 不存在——还没跑过确定性审查'
   const reports = (await readdir(reviewDir)).filter(name => name.endsWith('.review.md'))
-  return reports.length === 0 ? 'review/ 下没有任何 *.review.md 审查报告' : undefined
+  if (reports.length === 0) return 'review/ 下没有任何 *.review.md 审查报告'
+  const timed = await Promise.all(reports.map(async name => ({ name, time: await mtimeOf(join(reviewDir, name)) })))
+  timed.sort((a, b) => b.time - a.time)
+  const latest = timed[0]
+  if (latest === undefined) return 'review/ 下没有任何 *.review.md 审查报告'
+  const score = parseReportScore(await readText(join(reviewDir, latest.name)))
+  if (score === undefined) return `最新审查报告 ${latest.name} 缺少可解析的总分——重跑审查`
+  const sourceTime = await newestSourceTime(root)
+  if (latest.time < sourceTime) return `最新审查报告（总分 ${score}）早于源文件的最新修改——内容已变，需要重审`
+  if (score < effectiveThreshold) {
+    return `最新审查总分 ${score} 低于达标线 ${effectiveThreshold}${degraded ? '（查新不可用，已放宽 10 分）' : ''}——按报告修订后重审`
+  }
+  return undefined
+}
+
+/**
+ * Parse the report's overall score line.
+ * @param report - the report text.
+ * @returns the parsed score, or undefined when the line is absent.
+ */
+function parseReportScore(report: string | undefined): number | undefined {
+  if (report === undefined) return undefined
+  const match = REPORT_SCORE.exec(report)
+  const score = match?.[1]
+  return score === undefined ? undefined : Number(score)
 }
 
 /**
@@ -283,7 +350,7 @@ const STAGE_DIRECTIVES: Readonly<Record<Exclude<LoopStage, 'done'>, { directive:
     mayNeedUser: false,
   },
   review: {
-    directive: '还没有审查报告。确认审查目标（项目目录用 "."）后直接调用 patent_review 工具跑确定性七维审查，报告写入 review/；自己不评分、不手写审查文件。按报告中必须修改项修订源文件后进入导出。',
+    directive: '审查未达标（最新报告总分低于达标线，或还没有报告）。确认审查目标（项目目录用 "."）后直接调用 patent_review 工具跑确定性七维审查，报告写入 review/；自己不评分、不手写审查文件。对照报告把失分维度逐条修订到源文件，再重审到达标线为止；查新通道不可用导致阈值放宽时，按 patent-research 在 reference/prior-art.md 留「查新不可用：原因，待补查」标记，网络恢复后补查、删除标记并把分数审回原达标线。',
     skills: ['patent-review'],
     mayNeedUser: false,
   },
@@ -310,6 +377,12 @@ export async function assessLoopState(projectDir: string): Promise<LoopState> {
   const manifest = await readManifest(root)
   const gaps: LoopGap[] = []
   const projectName = manifest?.name ?? basename(root)
+  const priorArt = await readText(join(root, 'reference', 'prior-art.md'))
+  const degraded = priorArt !== undefined && PRIOR_ART_UNAVAILABLE.test(priorArt)
+  const configuredThreshold = manifest?.reviewThreshold ?? DEFAULT_REVIEW_THRESHOLD
+  const effectiveThreshold = degraded
+    ? Math.max(0, configuredThreshold - DEGRADED_REVIEW_DELTA)
+    : configuredThreshold
 
   if (manifest === undefined) {
     gaps.push({ stage: 'init', detail: '无 patent.yml——项目未建档' })
@@ -336,7 +409,7 @@ export async function assessLoopState(projectDir: string): Promise<LoopState> {
     if (figures.surplus.length > 0) {
       gaps.push({ stage: 'figures', detail: `figures/ 根有未在 08 章声明的成品：图${figures.surplus.join('、图')}（补声明或移除）` })
     }
-    const review = await reviewGap(root)
+    const review = await reviewGap(root, effectiveThreshold, degraded)
     if (review !== undefined) gaps.push({ stage: 'review', detail: review })
     const disclosure = await exportGap(root)
     if (disclosure !== undefined) gaps.push({ stage: 'export', detail: disclosure })

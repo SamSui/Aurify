@@ -133,6 +133,44 @@ describe('assessLoopState stage machine', () => {
     await writeFile(join(dir, 'review', 'project.review.md'), '总分 81\n', 'utf8')
     expect((await assessLoopState(dir)).stage).toBe('export')
 
+    // The score gate: a fresh report below the default bar of 80 keeps the loop at review.
+    await writeFile(join(dir, 'chapters', '07-key-points.md'), `# 关键点\n\n修订后的内容。${BODY}`, 'utf8')
+    await writeFile(join(dir, 'review', 'project.review.md'), '总分 79\n', 'utf8')
+    const low = await assessLoopState(dir)
+    expect(low.stage).toBe('review')
+    expect(low.gaps[0]?.detail).toContain('低于达标线 80')
+
+    // The prior-art degradation marker relaxes the bar by ten points.
+    await mkdir(join(dir, 'reference'), { recursive: true })
+    await writeFile(join(dir, 'reference', 'prior-art.md'), '查新不可用：代理未开启，待补查\n', 'utf8')
+    expect((await assessLoopState(dir)).stage).toBe('export')
+    await rm(join(dir, 'reference', 'prior-art.md'))
+
+    // A per-project threshold overrides the default bar.
+    await writeFile(join(dir, 'patent.yml'), `${MANIFEST}reviewThreshold: 85\n`, 'utf8')
+    await writeFile(join(dir, 'review', 'project.review.md'), '总分 81\n', 'utf8')
+    const strict = await assessLoopState(dir)
+    expect(strict.stage).toBe('review')
+    expect(strict.gaps[0]?.detail).toContain('低于达标线 85')
+
+    // A report older than the sources it reviewed is stale no matter its score.
+    await writeFile(join(dir, 'patent.yml'), MANIFEST, 'utf8')
+    await writeFile(join(dir, 'review', 'project.review.md'), '总分 95\n', 'utf8')
+    const stale = new Date(Date.now() - 60_000)
+    await utimes(join(dir, 'review', 'project.review.md'), stale, stale)
+    await writeFile(join(dir, 'chapters', '06-effect.md'), `# 有益效果\n\n审查之后的源文件修订。${BODY}`, 'utf8')
+    const outdated = await assessLoopState(dir)
+    expect(outdated.stage).toBe('review')
+    expect(outdated.gaps[0]?.detail).toContain('早于源文件')
+
+    // A report without a parseable total score fails loud instead of passing.
+    await writeFile(join(dir, 'review', 'project.review.md'), '没有总分行\n', 'utf8')
+    const unparseable = await assessLoopState(dir)
+    expect(unparseable.stage).toBe('review')
+    expect(unparseable.gaps[0]?.detail).toContain('缺少可解析的总分')
+
+    // A fresh passing report reopens the export gate, and done closes the loop.
+    await writeFile(join(dir, 'review', 'project.review.md'), '总分 88\n', 'utf8')
     await mkdir(join(dir, 'exports'), { recursive: true })
     await writeFile(join(dir, 'exports', '测试存储装置-交底书.docx'), 'docx', 'utf8')
     const fresh = await assessLoopState(dir)

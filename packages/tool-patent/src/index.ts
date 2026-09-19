@@ -251,8 +251,11 @@ export function apply(ctx: Context): void {
     description: 'Assess a patent project from any stage and name the one next pipeline stage '
       + '(init → align → chapters → experiments → figures → review → export) with its directive. '
       + 'Every verdict is read from disk facts — manifest, brief, chapters, the experiment run log, '
-      + 'figure files against the drawings chapter, review reports, and the exported disclosure docx — '
-      + 'never from the conversation, so this is the only authority on whether the project is 成稿. '
+      + 'figure files against the drawings chapter, the NEWEST review report total score against the '
+      + 'threshold (default 80; reviewThreshold in patent.yml overrides; a 查新不可用 marker in '
+      + 'reference/prior-art.md relaxes it by 10) with report freshness against the sources, and the '
+      + 'exported disclosure docx — never from the conversation, so this is the only authority on '
+      + 'whether the project is 成稿. '
       + 'Use it to start or resume a full-pipeline push ("loop", "继续推进", "帮我完成"), and call it '
       + 'again after finishing each stage; only its complete=true verdict ends the loop.',
     parameters: {
