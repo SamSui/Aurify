@@ -1,6 +1,6 @@
 # 点金 Aurify · dsh 专利撰写插件 · 离线分发包
 
-版本：0.1.6-alpha.1（对应源码提交 ec698090，2026-09-18 打包）
+版本：0.1.6-alpha.1（对应源码提交 29fdca18，2026-09-19 打包）
 
 这是 DeepSeek Harness（dsh）的专利交底书撰写插件「点金」——不是每块石头都值得点，先验金，再点金。丢一个技术点子，它先检索中国专利给出「值不值得写」的评估（可以反驳它），确认方向后走完五方对齐访谈、八章交底书撰写、附图与仿真实验、确定性审查、docx/PDF 导出，以及可选的 Python 导出/渲染/检索/查新服务。
 
@@ -104,12 +104,26 @@ uv tool install "<DIST>/deepseek_harness_patent_services-0.1.0-py3-none-any.whl"
 
 | 文件 | 说明 |
 |---|---|
-| `mtl-academic-dsh-patent-*.tgz` | 插件本体（含 13 个技能 + Web UI 卡片/面板） |
+| `mtl-academic-dsh-patent-*.tgz` | 插件本体（含 14 个技能 + Web UI 卡片/面板） |
 | `deepseek-ai-dsh-tool-patent-*.tgz` | 依赖：权利要求/覆盖度检查工具 |
 | `deepseek-ai-dsh-command-patent-review-*.tgz` | 依赖：/patent-review 审查命令 |
 | `deepseek-ai-schemastery-*.tgz` / `deepseek-ai-cosmokit-*.tgz` | 依赖：配置校验库（vendored 构建版） |
 | `deepseek_harness_patent_services-*.whl` / `.tar.gz` | 可选 Python 服务（导出/渲染/检索/实验/查新） |
 | `dsh-patent-full.bundle` / `patches/` | 源码（git bundle / 格式化补丁） |
+
+## 核心版本兼容表
+
+插件跨 dsh 核心版本可用（旧核心自动降级，不会失败），但部分能力需要较新的核心才完整生效：
+
+| 能力 | 旧核心（0.1.5-rc 线） | 新核心（0.1.6-alpha 线） |
+|---|---|---|
+| patent_loop 全流程推进 / 分数门 / 查新债放宽 | ✅ 完整可用 | ✅ 完整可用 |
+| patent_prose_lint 去 AI 味检查 / patent_prose 全部工具 | ✅ 完整可用 | ✅ 完整可用 |
+| 审查温度（reviewTemperature=0.2） | ⚠️ 自动降级：旧引擎不识别该选项，评分子代理用模型默认温度，审查照常运行 | ✅ 完整生效 |
+| 讨论温度（顶层会话 0.7） | ⚠️ 视核心是否在请求载荷注入会话主体而定，未注入则自动关闭 | ✅ 完整生效 |
+| 实验自动出图 + 代码指纹入 run-log | ✅ 完整可用（随 Python 服务生效，与核心版本无关） | ✅ 完整可用 |
+
+升级核心后无需重装插件，重启桌面版即带全新行为。
 
 ## 已知边界
 
