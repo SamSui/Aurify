@@ -1,5 +1,5 @@
 ---
-description: "Deterministic patent surfaces: five-party alignment readiness scoring, CNIPA claims linting, and the patent-loop state assessor that drives a project from any stage to the exported disclosure."
+description: "Deterministic patent surfaces: five-party alignment readiness scoring, CNIPA claims linting, de-AI prose linting, and the patent-loop state assessor that drives a project from any stage to the exported disclosure."
 kind: "package-reference"
 ---
 
@@ -25,7 +25,7 @@ Model-facing deterministic patent surfaces. `patent_brief_coverage` scores a dis
 
 ## What it does
 
-Registers three tools on `ctx.tools` and one command on `ctx.commands`. For `patent_brief_coverage` the model sends the draft content collected so far per dimension — `field`, `background`, `problem`, `solution`, `effect`, plus the edge dimensions `name`, `drawings`, `key_points` (omitted keys mean uncollected) — and receives the collected/missing split, the three-way alignment verdict, and the readiness signal. For `patent_claims_lint` the model sends the drafted claims text (and the optional abstract) and receives the claim count split and the rule violations. The coverage and lint tools are pure functions of their arguments; calls and results ride the loop's `tool/call` and `tool/result` session events, and nothing else is appended. `patent_loop` and `/patent-loop` share one disk-reading assessor (see [Loop semantics](#loop-semantics)).
+Registers four tools on `ctx.tools` and one command on `ctx.commands`. For `patent_brief_coverage` the model sends the draft content collected so far per dimension — `field`, `background`, `problem`, `solution`, `effect`, plus the edge dimensions `name`, `drawings`, `key_points` (omitted keys mean uncollected) — and receives the collected/missing split, the three-way alignment verdict, and the readiness signal. For `patent_claims_lint` the model sends the drafted claims text (and the optional abstract) and receives the claim count split and the rule violations. The coverage and lint tools are pure functions of their arguments; calls and results ride the loop's `tool/call` and `tool/result` session events, and nothing else is appended. `patent_prose_lint` is the machine half of the patent-de-ai skill: filler phrases, over-150-character sentences, triple parallelisms (errors to clear), plus paragraph summaries and textbook definitions (warnings). `patent_loop` and `/patent-loop` share one disk-reading assessor (see [Loop semantics](#loop-semantics)).
 
 ## Scoring semantics
 

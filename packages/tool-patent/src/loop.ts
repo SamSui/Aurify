@@ -67,6 +67,8 @@ export interface LoopState {
   skills: string[]
   /** Whether the current stage may pause for user input (evaluation, interview). */
   mayNeedUser: boolean
+  /** Whether the prior-art search is marked unreachable in reference/prior-art.md. */
+  priorArtDegraded: boolean
 }
 
 /** Whether a path exists. */
@@ -203,9 +205,40 @@ async function figureGaps(root: string): Promise<{ missing: number[]; surplus: n
       if (entry.isFile() && match !== null) present.add(Number(match[1]))
     }
   }
+  // The documented escape hatch: a project declaring 无附图 in the drawings
+  // chapter plans zero figures on purpose — the declaration itself satisfies
+  // the planning gate (surplus files on disk still count as mismatches).
+  const noFigures = drawings !== undefined && drawings.includes('无附图')
   const missing = [...declared].filter(number => !present.has(number)).sort((a, b) => a - b)
   const surplus = [...present].filter(number => !declared.has(number)).sort((a, b) => a - b)
-  return { missing, surplus, planned: declared.size > 0 }
+  return { missing, surplus, planned: declared.size > 0 || noFigures }
+}
+
+/** A figure reference in prose: `见图5` / `如图3所示` — the digits must be declared. */
+const FIGURE_REFERENCE = /图(\d+)/g
+
+/**
+ * Collect figure numbers the prose references outside the drawings chapter.
+ * A reference to a number 08-drawings never declares means the prose and the
+ * figure plan have drifted (typically after renumbering).
+ * @param root - the project directory.
+ * @param declared - the figure numbers 08-drawings.md declares.
+ * @returns referenced-but-undeclared figure numbers, in first-seen order.
+ */
+async function undeclaredReferences(root: string, declared: Set<number>): Promise<number[]> {
+  const chaptersDir = join(root, 'chapters')
+  if (!await exists(chaptersDir)) return []
+  const unseen: number[] = []
+  for (const entry of (await readdir(chaptersDir)).sort()) {
+    if (!entry.endsWith('.md') || entry === '08-drawings.md') continue
+    const body = await readText(join(chaptersDir, entry))
+    if (body === undefined) continue
+    for (const match of body.matchAll(FIGURE_REFERENCE)) {
+      const number = Number(match[1])
+      if (!declared.has(number) && !unseen.includes(number)) unseen.push(number)
+    }
+  }
+  return unseen
 }
 
 /**
@@ -248,11 +281,13 @@ async function newestSourceTime(root: string): Promise<number> {
 }
 
 /**
- * Whether the review stage is satisfied: the NEWEST rubric report carries a
- * parsed total score at or above the effective threshold, and is not older
- * than the sources it reviewed. One report is the verdict — the latest
- * review always replaces the previous one, so a stale passing score can
- * never mask a fresh failing one.
+ * Whether the review stage is satisfied: the NEWEST rubric report is a
+ * whole-project review (stamped `审查范围：整项`; older reports without the
+ * stamp pass permissively) whose parsed total score reaches the effective
+ * threshold, and which is not older than the sources it reviewed. On top of
+ * that, the attempt ledger escalates: after repeated below-threshold
+ * re-reviews with stalling gains, the gate stops asking for another
+ * re-review and tells the model to put the decision in the user's hands.
  * @param root - the project directory.
  * @param effectiveThreshold - the score bar after any degradation relaxation.
  * @param degraded - whether the prior-art marker relaxed the threshold.
@@ -267,14 +302,56 @@ async function reviewGap(root: string, effectiveThreshold: number, degraded: boo
   timed.sort((a, b) => b.time - a.time)
   const latest = timed[0]
   if (latest === undefined) return 'review/ 下没有任何 *.review.md 审查报告'
-  const score = parseReportScore(await readText(join(reviewDir, latest.name)))
+  const content = await readText(join(reviewDir, latest.name))
+  const score = parseReportScore(content)
   if (score === undefined) return `最新审查报告 ${latest.name} 缺少可解析的总分——重跑审查`
+  if (/审查范围：部分/.test(content ?? '')) {
+    return `最新审查报告只覆盖了局部目标（${latest.name}）——审查整个项目（目标用 "."）后重审，局部报告不作为整项达标的依据`
+  }
   const sourceTime = await newestSourceTime(root)
   if (latest.time < sourceTime) return `最新审查报告（总分 ${score}）早于源文件的最新修改——内容已变，需要重审`
+  const stall = await stalledReview(reviewDir, effectiveThreshold)
+  if (stall !== undefined) return stall
   if (score < effectiveThreshold) {
-    return `最新审查总分 ${score} 低于达标线 ${effectiveThreshold}${degraded ? '（查新不可用，已放宽 10 分）' : ''}——按报告修订后重审`
+    return `最新审查总分 ${score} 低于达标线 ${effectiveThreshold}${degraded ? '（查新不可用，已放宽 10 分）' : ''}——对照报告修订清单逐维度修订后重审`
   }
   return undefined
+}
+
+/**
+ * Detect convergence stall in the attempt ledger: a trailing run of
+ * below-threshold whole-project attempts long enough (three, or two with a
+ * gain under three points) that another automatic re-review would just burn
+ * tokens. The escape is the user's decision — lowering `reviewThreshold`
+ * below the latest score, or resetting the ledger — both machine-visible.
+ * @param reviewDir - the review directory holding attempts.md.
+ * @param threshold - the effective score bar the attempts are judged against.
+ * @returns the escalation message, or undefined while attempts are still converging.
+ */
+async function stalledReview(reviewDir: string, threshold: number): Promise<string | undefined> {
+  const ledger = await readText(join(reviewDir, 'attempts.md'))
+  if (ledger === undefined) return undefined
+  const scores = [...ledger.matchAll(/总分 (\d+)/g)]
+    .map(match => Number(match[1]))
+    .slice(-6)
+  // Only the trailing run of below-threshold attempts matters; a passing
+  // attempt resets the count by definition.
+  const below: number[] = []
+  for (const score of reversed(scores)) {
+    if (score >= threshold) break
+    below.unshift(score)
+  }
+  const latestScore = below.at(-1)
+  const firstScore = below[0]
+  const gained = latestScore !== undefined && firstScore !== undefined && latestScore - firstScore >= 3
+  const stalled = below.length >= 3 || (below.length === 2 && !gained)
+  if (!stalled) return undefined
+  return `已连续 ${below.length} 次重审未达线（${below.join(' → ')}，达标线 ${threshold}）且分数增益停滞——停止自动重审，向用户汇报并请求决策：调低 patent.yml 的 reviewThreshold（低于最新分 ${latestScore ?? 0} 即放行），或删除 review/attempts.md 重置计数后继续修订`
+}
+
+/** Iterate an array last-to-first without mutating it. */
+function* reversed<T>(items: T[]): Iterable<T> {
+  for (let index = items.length - 1; index >= 0; index--) yield items[index] as T
 }
 
 /**
@@ -409,6 +486,14 @@ export async function assessLoopState(projectDir: string): Promise<LoopState> {
     if (figures.surplus.length > 0) {
       gaps.push({ stage: 'figures', detail: `figures/ 根有未在 08 章声明的成品：图${figures.surplus.join('、图')}（补声明或移除）` })
     }
+    const declared = new Set<number>()
+    const drawings = await readText(join(root, 'chapters', '08-drawings.md'))
+    if (drawings !== undefined) {
+      for (const match of drawings.matchAll(FIGURE_DECLARATION)) declared.add(Number(match[1]))
+    }
+    for (const number of await undeclaredReferences(root, declared)) {
+      gaps.push({ stage: 'figures', detail: `正文引用了图${number}，但 08 章未声明——补声明或修正正文引用` })
+    }
     const review = await reviewGap(root, effectiveThreshold, degraded)
     if (review !== undefined) gaps.push({ stage: 'review', detail: review })
     const disclosure = await exportGap(root)
@@ -429,5 +514,6 @@ export async function assessLoopState(projectDir: string): Promise<LoopState> {
     directive: current.directive,
     skills: current.skills,
     mayNeedUser: current.mayNeedUser,
+    priorArtDegraded: degraded,
   }
 }

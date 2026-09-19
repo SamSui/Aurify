@@ -1,0 +1,26 @@
+<mxfile host="app.diagrams.net">
+  <diagram id="tpl-arch" name="架构分组块">
+    <mxGraphModel dx="900" dy="700" grid="0" gridSize="10" guides="1" page="1" pageScale="1" pageWidth="900" pageHeight="460" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="g1" value="角色/来源侧" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontColor=#000000;verticalAlign=top;fontStyle=1" vertex="1" parent="1"><mxGeometry x="40" y="60" width="180" height="300" as="geometry"/></mxCell>
+        <mxCell id="ag1" value="成员 A" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontColor=#000000" vertex="1" parent="1"><mxGeometry x="60" y="100" width="140" height="50" as="geometry"/></mxCell>
+        <mxCell id="ag2" value="成员 B" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontColor=#000000" vertex="1" parent="1"><mxGeometry x="60" y="180" width="140" height="50" as="geometry"/></mxCell>
+        <mxCell id="ag3" value="成员 C" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontColor=#000000" vertex="1" parent="1"><mxGeometry x="60" y="260" width="140" height="50" as="geometry"/></mxCell>
+        <mxCell id="g2" value="核心组件" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontColor=#000000;verticalAlign=top;fontStyle=1" vertex="1" parent="1"><mxGeometry x="300" y="60" width="280" height="300" as="geometry"/></mxCell>
+        <mxCell id="tab" value="登记表&#10;成员A：其输入/状态&#10;成员B：其输入/状态&#10;成员C：其输入/状态" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontColor=#000000" vertex="1" parent="1"><mxGeometry x="320" y="100" width="240" height="110" as="geometry"/></mxCell>
+        <mxCell id="det" value="判定器&#10;（判定依据一句话）" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontColor=#000000" vertex="1" parent="1"><mxGeometry x="320" y="250" width="240" height="70" as="geometry"/></mxCell>
+        <mxCell id="g3" value="结果侧" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontColor=#000000;verticalAlign=top;fontStyle=1" vertex="1" parent="1"><mxGeometry x="680" y="60" width="180" height="300" as="geometry"/></mxCell>
+        <mxCell id="ok" value="分支一（无冲突）：&#10;放行/生效" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontColor=#000000" vertex="1" parent="1"><mxGeometry x="700" y="100" width="140" height="70" as="geometry"/></mxCell>
+        <mxCell id="hold" value="分支二（有冲突）：&#10;拦截/待处理" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontColor=#000000" vertex="1" parent="1"><mxGeometry x="700" y="250" width="140" height="70" as="geometry"/></mxCell>
+        <mxCell id="e1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#000000;fontColor=#000000;exitX=1;exitY=0.55;entryX=0;entryY=0.25" edge="1" parent="1" source="ag1" target="tab"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="260" y="127"/></Array></mxGeometry></mxCell>
+        <mxCell id="e2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#000000;fontColor=#000000;exitX=1;exitY=0.5;entryX=0;entryY=0.5" edge="1" parent="1" source="ag2" target="tab"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="250" y="205"/></Array></mxGeometry></mxCell>
+        <mxCell id="e3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#000000;fontColor=#000000;exitX=1;exitY=0.5;entryX=0;entryY=0.75" edge="1" parent="1" source="ag3" target="tab"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="285" y="285"/></Array></mxGeometry></mxCell>
+        <mxCell id="e4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#000000;fontColor=#000000;exitX=0.5;exitY=1;entryX=0.5;entryY=0" edge="1" parent="1" source="tab" target="det"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e5" value="条件一（通过）" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#000000;fontColor=#000000;exitX=1;exitY=0.25;entryX=0;entryY=0.5" edge="1" parent="1" source="det" target="ok"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e6" value="条件二（不通过）" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#000000;fontColor=#000000;dashed=1;exitX=1;exitY=0.75;entryX=0;entryY=0.5" edge="1" parent="1" source="det" target="hold"><mxGeometry relative="1" as="geometry"/></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

@@ -92,13 +92,20 @@ const SCORE_TIER = (score: number): string => score >= 90 ? '优秀' : score >= 
  * Render the deterministic markdown report for one review run.
  * @param outcome - the validated script result.
  * @param fileLabel - the reviewed path, as the caller addressed it.
+ * @param scope - whether the target was the whole project root ('project') or
+ * a narrower file/directory ('partial'); the loop's score gate only accepts
+ * whole-project reports, so the scope is stamped into the report body.
  * @returns the report body (no trailing newline; the writer adds one).
  */
-export function renderReport(outcome: ReviewOutcome, fileLabel: string): string {
+export function renderReport(outcome: ReviewOutcome, fileLabel: string, scope: 'project' | 'partial' = 'partial'): string {
   const lines: string[] = [
     `# 交底书审查：${fileLabel}`,
     '',
     `**总分**：${outcome.overall === null ? '无（所有维度评分失败）' : `${outcome.overall} / 100`}`,
+    '',
+    scope === 'project'
+      ? '> 审查范围：整项（项目根）'
+      : `> 审查范围：部分（${fileLabel}）——本报告不作为整项达标的依据`,
     '',
     '| 维度 | 权重 | 均分 | 各次评分 | 失败次数 |',
     '| --- | --- | --- | --- | --- |',
@@ -107,6 +114,18 @@ export function renderReport(outcome: ReviewOutcome, fileLabel: string): string 
     const average = dimension.average === null ? '—' : String(dimension.average)
     const scores = dimension.scores.length === 0 ? '—' : dimension.scores.join(' / ')
     lines.push(`| ${dimension.title} (${dimension.key}) | ${dimension.weight} | ${average} | ${scores} | ${dimension.failedPasses} |`)
+  }
+  const revisionList = outcome.dimensions
+    .filter(dimension => dimension.average !== null)
+    .map(dimension => ({ dimension, impact: dimension.weight * (100 - (dimension.average ?? 0)) }))
+    .filter(({ impact }) => impact > 0)
+    .sort((a, b) => b.impact - a.impact)
+    .slice(0, 5)
+  if (revisionList.length > 0) {
+    lines.push('', '## 修订清单（按影响排序）', '')
+    for (const { dimension, impact } of revisionList) {
+      lines.push(`- **${dimension.title}**（均分 ${dimension.average}，影响 ${impact.toFixed(1)}）：${dimension.suggestions[0] ?? '（无建议）'}`)
+    }
   }
   for (const dimension of outcome.dimensions) {
     lines.push('', `## ${dimension.title}（${dimension.key}）`, '')

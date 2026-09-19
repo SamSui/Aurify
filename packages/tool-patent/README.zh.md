@@ -1,5 +1,5 @@
 ---
-description: "确定性专利工具面：交底书 brief 的五方对齐就绪度打分、权利要求书的 CNIPA 格式静态检查，以及把项目从任意阶段推进到导出成稿的 patent-loop 状态评估。"
+description: "确定性专利工具面：交底书 brief 的五方对齐就绪度打分、权利要求书的 CNIPA 格式静态检查、去 AI 味正文检查，以及把项目从任意阶段推进到导出成稿的 patent-loop 状态评估。"
 kind: "package-reference"
 ---
 
@@ -26,7 +26,7 @@ kind: "package-reference"
 <a id="what-it-does"></a>
 ## 做什么
 
-在 `ctx.tools` 上注册三个工具、在 `ctx.commands` 上注册一个命令。`patent_brief_coverage`：模型按维度传入已收集的草稿内容——`field`、`background`、`problem`、`solution`、`effect` 五个核心维度，外加 `name`、`drawings`、`key_points` 三个边缘维度（省略即未收集）——返回已收集/缺失清单、三方对齐判定与就绪信号。`patent_claims_lint`：模型传入起草的权利要求书文本（及可选摘要），返回权项数量结构与规则违例。两个纯函数工具的调用与结果经 loop 的 `tool/call` 与 `tool/result` session 事件记录，不追加任何其他事件。`patent_loop` 与 `/patent-loop` 共用一个读盘评估器（见[循环语义](#loop-semantics)）。
+在 `ctx.tools` 上注册四个工具、在 `ctx.commands` 上注册一个命令。`patent_brief_coverage`：模型按维度传入已收集的草稿内容——`field`、`background`、`problem`、`solution`、`effect` 五个核心维度，外加 `name`、`drawings`、`key_points` 三个边缘维度（省略即未收集）——返回已收集/缺失清单、三方对齐判定与就绪信号。`patent_claims_lint`：模型传入起草的权利要求书文本（及可选摘要），返回权项数量结构与规则违例。两个纯函数工具的调用与结果经 loop 的 `tool/call` 与 `tool/result` session 事件记录，不追加任何其他事件。`patent_prose_lint` 是 patent-de-ai 技能的机器半边：套话转折词、超 150 字长句、三连排比为必须清除的 error，段末总结与教科书定义为 warning 提示。`patent_loop` 与 `/patent-loop` 共用一个读盘评估器（见[循环语义](#loop-semantics)）。
 
 <a id="scoring-semantics"></a>
 ## 打分语义

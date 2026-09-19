@@ -1,0 +1,38 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  python-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          version: latest
+      - name: Run patent-services test suite
+        run: uv run --project python/patent-services --group test pytest python/patent-services/tests -q
+
+  dist-integrity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dist artifacts present and non-empty
+        run: |
+          set -e
+          for f in mtl-academic-dsh-patent-*.tgz deepseek-ai-dsh-tool-patent-*.tgz \
+                   deepseek-ai-dsh-command-patent-review-*.tgz \
+                   deepseek_harness_patent_services-*.whl; do
+            match=(dist/$f)
+            [ -e "${match[0]}" ] || { echo "missing dist artifact: $f"; exit 1; }
+            [ -s "${match[0]}" ] || { echo "empty dist artifact: $f"; exit 1; }
+          done
+      - name: Skill catalog intact (14 shipped skills)
+        run: |
+          count=$(ls -d packages/bundle-patent/skills/*/ | wc -l)
+          echo "skills: $count"
+          [ "$count" -eq 14 ] || { echo "expected 14 skills"; exit 1; }
+          grep -q "patent-loop" <(ls packages/bundle-patent/skills/) || { echo "patent-loop skill missing"; exit 1; }

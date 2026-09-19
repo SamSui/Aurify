@@ -178,6 +178,40 @@ describe('assessLoopState stage machine', () => {
     expect(fresh.complete).toBe(true)
   })
 
+  it('rejects a partial-scope report as the whole-project verdict', async () => {
+    const dir = await fullProject('partial-scope')
+    await writeFile(join(dir, 'chapters', '08-drawings.md'), `# 附图说明\n\n无附图\n${BODY}`, 'utf8')
+    await mkdir(join(dir, 'review'), { recursive: true })
+    await writeFile(join(dir, 'review', 'chapters.review.md'), '总分 92\n\n> 审查范围：部分（chapters）\n', 'utf8')
+    const state = await assessLoopState(dir)
+    expect(state.stage).toBe('review')
+    expect(state.gaps[0]?.detail).toContain('只覆盖了局部目标')
+  })
+
+  it('escalates instead of re-reviewing forever once score gains stall', async () => {
+    const dir = await fullProject('stalled')
+    await writeFile(join(dir, 'chapters', '08-drawings.md'), `# 附图说明\n\n无附图\n${BODY}`, 'utf8')
+    await mkdir(join(dir, 'review'), { recursive: true })
+    await writeFile(join(dir, 'review', 'project.review.md'), '总分 73\n', 'utf8')
+    await writeFile(
+      join(dir, 'review', 'attempts.md'),
+      '- t1 总分 70 范围 project 目标 .\n- t2 总分 72 范围 project 目标 .\n- t3 总分 73 范围 project 目标 .\n',
+      'utf8',
+    )
+    const state = await assessLoopState(dir)
+    expect(state.stage).toBe('review')
+    expect(state.gaps[0]?.detail).toContain('连续 3 次重审未达线')
+    expect(state.gaps[0]?.detail).toContain('reviewThreshold')
+  })
+
+  it('flags prose references to undeclared figures', async () => {
+    const dir = await fullProject('figure-refs')
+    await writeFile(join(dir, 'chapters', '08-drawings.md'), `# 附图说明\n\n图1 为流程总览图。\n${BODY}`, 'utf8')
+    await writeFile(join(dir, 'chapters', '06-effect.md'), `# 有益效果\n\n静默丢失归零（对比见图9）。${BODY}`, 'utf8')
+    const state = await assessLoopState(dir)
+    expect(state.gaps.some(gap => gap.detail.includes('正文引用了图9，但 08 章未声明'))).toBe(true)
+  })
+
   it('reopens the export stage when a source file is newer than the exported docx', async () => {
     const dir = await fullProject('stale-export')
     await writeFile(join(dir, 'chapters', '08-drawings.md'), `# 附图说明\n\n图1 为流程总览图。\n${BODY}`, 'utf8')

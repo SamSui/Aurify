@@ -230,7 +230,11 @@ async function executeReview(
   const file = await readTarget(projectRoot, target)
   if (file === undefined) return { result: { kind: 'error', text: `未找到可审查的 Markdown 文件：${target}` } }
   const reportRoot = (await findEnclosingProject(resolve(projectRoot, target))) ?? projectRoot
-  const consistency = await readConsistencyInputs(reportRoot, resolve(projectRoot, target))
+  const resolvedTarget = resolve(projectRoot, target)
+  const consistency = await readConsistencyInputs(reportRoot, resolvedTarget)
+  // Whole-project scope: the resolved target IS the project root. The loop's
+  // score gate only accepts reports stamped with this scope.
+  const scope: 'project' | 'partial' = resolvedTarget === resolve(reportRoot) ? 'project' : 'partial'
 
   const run = ctx.workflowEngine.start({
     meta: { name: 'patent-review', description: `Rubric review of ${file.label}` },
@@ -269,7 +273,16 @@ async function executeReview(
   const safeName = rawLabel.replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '').replace(/\.md$/i, '') || 'project'
   await mkdir(join(reportRoot, 'review'), { recursive: true })
   const reportPath = relative(projectRoot, join(reportRoot, 'review', `${safeName}.review.md`)).replaceAll('\\', '/')
-  await writeFile(join(reportRoot, 'review', `${safeName}.review.md`), `${renderReport(outcome, file.label)}\n`, 'utf8')
+  await writeFile(join(reportRoot, 'review', `${safeName}.review.md`), `${renderReport(outcome, file.label, scope)}\n`, 'utf8')
+  // The attempt ledger is the loop's convergence memory: below-threshold
+  // re-reviews accumulate here, and the loop's gate escalates to the user
+  // instead of re-reviewing forever once they stop paying off.
+  const overallText = outcome.overall === null ? '无' : String(outcome.overall)
+  await writeFile(
+    join(reportRoot, 'review', 'attempts.md'),
+    `- ${new Date().toISOString()} 总分 ${overallText} 范围 ${scope} 目标 ${file.label || '(项目根)'}\n`,
+    { encoding: 'utf8', flag: 'a' },
+  )
   return {
     result: { kind: 'success', text: summarize(outcome, reportPath) },
     dimensions: outcome.dimensions.map(({ key, title, weight, average, failedPasses }) => ({ key, title, weight, average, failedPasses })),
@@ -351,7 +364,7 @@ export function apply(ctx: Context, config: Config): void {
         }
         const executed = await runFull({ rawInput: args.target, agent: exec.agent, signal: exec.signal })
         const result = executed.result
-        if (result.kind === 'error') return { kind: 'error' as const, report: '', summary: result.text ?? '审查失败。' }
+        if (result.kind === 'error') return { kind: 'error' as const, report: '', summary: result.text.length > 0 ? result.text : '审查失败。' }
         const overall = /总分\s*(\d+)/.exec(result.text ?? '')?.[1]
         return {
           kind: 'success' as const,

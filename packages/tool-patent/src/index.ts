@@ -17,12 +17,15 @@ import type { CommandInvocation, CommandResult } from '@deepseek-ai/dsh-commands
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { ALL_DIMENSIONS, ALIGN_TOLERANCE, computeCoverage, DIMENSION_TITLES, type DimensionOutline } from './coverage.ts'
 import { ABSTRACT_MAX_CHARS, lintClaims } from './claims-lint.ts'
+import { lintProse } from './prose-lint.ts'
 import { assessLoopState, type LoopState } from './loop.ts'
 
 export { computeCoverage } from './coverage.ts'
 export type { Coverage, DimensionOutline } from './coverage.ts'
 export { lintClaims, parseClaims, countAbstractChars, ABSTRACT_MAX_CHARS } from './claims-lint.ts'
 export type { ClaimsLintResult, ParsedClaim, ClaimViolation } from './claims-lint.ts'
+export { lintProse } from './prose-lint.ts'
+export type { ProseLintResult, ProseViolation } from './prose-lint.ts'
 export { assessLoopState } from './loop.ts'
 export type { LoopGap, LoopStage, LoopState } from './loop.ts'
 
@@ -119,6 +122,21 @@ function renderLoop(value: { complete: boolean; projectName: string; stage: stri
     ? '交付导出物路径与要点摘要即可，不要再循环。'
     : '按指令完成后再次调用 patent_loop 核验，直到返回 LOOP COMPLETE。'
   return [{ type: 'text', text: `${head}\n${value.directive}\n${tail}` }]
+}
+
+/**
+ * Probe whether the prior-art search channel is reachable again. Best effort
+ * with a short timeout — a failure keeps the degraded (relaxed) state without
+ * any error surfacing to the caller.
+ * @returns whether patents.google.com answered within the timeout.
+ */
+async function searchChannelReachable(): Promise<boolean> {
+  try {
+    const response = await fetch('https://patents.google.com/', { signal: AbortSignal.timeout(3000) })
+    return response.ok
+  } catch {
+    return false
+  }
 }
 
 /**
@@ -247,6 +265,71 @@ export function apply(ctx: Context): void {
   }))
 
   ctx.tools.register(defineTool({
+    name: 'patent_prose_lint',
+    description: 'Deterministic de-AI prose lint for disclosure chapter text, the machine half of the '
+      + 'patent-de-ai skill: filler transition phrases (值得注意的是/换言之/综上所述…), sentences over 150 '
+      + 'characters, triple parallelisms, paragraph-ending summary sentences, and textbook definitions. '
+      + 'Errors must be cleared before a chapter counts as drafted; warnings are drafting hints. '
+      + 'Run it on every drafted or revised chapter before presenting it.',
+    parameters: {
+      text: {
+        type: 'string',
+        required: true,
+        description: 'The chapter prose to check (one chapter or a span; markdown structure is fine).',
+      },
+    },
+    output: {
+      schema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          summary: {
+            type: 'object',
+            additionalProperties: false,
+            required: true,
+            properties: {
+              cliches: { type: 'integer', required: true },
+              longSentences: { type: 'integer', required: true },
+              parallelisms: { type: 'integer', required: true },
+              paragraphSummaries: { type: 'integer', required: true },
+              definitions: { type: 'integer', required: true },
+              errors: { type: 'integer', required: true },
+              warnings: { type: 'integer', required: true },
+            },
+          },
+          violations: {
+            type: 'array',
+            required: true,
+            items: {
+              type: 'object',
+              additionalProperties: false,
+              properties: {
+                rule: { type: 'string', required: true },
+                severity: { type: 'string', required: true },
+                message: { type: 'string', required: true },
+                excerpt: { type: 'string', required: true },
+              },
+            },
+          },
+        },
+      },
+      render: (_args, value) => [{
+        type: 'text',
+        text: `Prose lint: ${value.summary.errors} errors, ${value.summary.warnings} warnings `
+          + `(cliches ${value.summary.cliches}, long sentences ${value.summary.longSentences}, `
+          + `parallelisms ${value.summary.parallelisms}). `
+          + (value.summary.errors === 0 ? 'PASS.' : 'Fix the errors before the chapter counts as drafted.'),
+      }],
+      presentationMeta: (_args, value) => value,
+    },
+    execute(args) {
+      // Pure function of the submitted text, like the claims lint.
+      return Promise.resolve(lintProse(args.text))
+    },
+    presentCall: () => ({ card: 'generic', title: 'Lint prose', kind: 'other', rawInput: { text: '…' } }),
+  }))
+
+  ctx.tools.register(defineTool({
     name: 'patent_loop',
     description: 'Assess a patent project from any stage and name the one next pipeline stage '
       + '(init → align → chapters → experiments → figures → review → export) with its directive. '
@@ -275,6 +358,7 @@ export function apply(ctx: Context): void {
           projectName: { type: 'string', required: true },
           projectRoot: { type: 'string', required: true },
           mayNeedUser: { type: 'boolean', required: true },
+          priorArtDegraded: { type: 'boolean', required: true },
           skills: { type: 'array', required: true, items: { type: 'string' } },
           directive: { type: 'string', required: true },
           gaps: { type: 'array', required: true, items: { type: 'string' } },
@@ -292,21 +376,27 @@ export function apply(ctx: Context): void {
           projectName: '',
           projectRoot: '',
           mayNeedUser: false,
+          priorArtDegraded: false,
           skills: [],
           directive: '无法定位项目目录：会话未携带工作目录，请用 project_dir 参数显式指定。',
           gaps: ['无法定位项目目录'],
         }
       }
       const state = await assessLoopState(resolve(root))
+      const gaps = state.gaps.map(gap => `[${gap.stage}] ${gap.detail}`)
+      if (state.priorArtDegraded && await searchChannelReachable()) {
+        gaps.push('[查新债] 检索通道已恢复：按 patent-research 补检索 reference/prior-art.md，然后删除「查新不可用」标记，并把审查分数审回未放宽的达标线')
+      }
       return {
         stage: state.stage,
         complete: state.complete,
         projectName: state.projectName,
         projectRoot: state.projectRoot,
         mayNeedUser: state.mayNeedUser,
+        priorArtDegraded: state.priorArtDegraded,
         skills: state.skills,
         directive: state.directive,
-        gaps: state.gaps.map(gap => `[${gap.stage}] ${gap.detail}`),
+        gaps,
       }
     },
     presentCall: args => ({ card: 'generic', title: 'Patent loop', kind: 'other', rawInput: args }),
