@@ -21,40 +21,28 @@
 
 组成：**14 个技能**（撰写纪律）+ **5 个原生工具**（就绪度打分、权利要求/正文检查、全流程推进、审查直通）+ **8 个 MCP 工具**（导出/解析/渲染/检索/实验/查新，Python 服务）+ `/patent-review` 审查命令 + Web 结构化卡片与项目面板。Bundle 不带 persona（人格在档案补丁层，安装时一并装入），可装入任意 dsh 档案。
 
-## 安装（最短路径）
+## 安装
+
+安装细节只维护一份正本（`dist/` 内），根 README 只保留最短路径与跳转：
+
+| 文档 | 管什么 |
+|---|---|
+| 本节 | 最短路径——能直接复制跑通的最少命令 |
+| [dist/README.md](dist/README.md) | **完整接收方指南**（中文）：手动安装逐步命令、验收方法、模型配置、可选功能、核心兼容表、已知边界 |
+| [dist/INSTALL-NEW-PROFILE.md](dist/INSTALL-NEW-PROFILE.md) | 安装器参数、手动步骤（英文）、macOS/Linux 路径替换表、故障排查 |
 
 前置：[DeepSeek Harness 桌面版](https://github.com/hairyf/deepseek-harness-desktop)（或 dsh ≥0.1.5）；可选 uv（Python 服务）与 Docker Desktop（附图渲染、仿真实验）。
 
-**方式 A · 一键安装器（推荐）**——解包插件为目录后运行自带安装器，它自动完成建档案、写依赖 overrides、装包、装 persona 与验证，幂等可重跑：
+**方式 A · 一键安装器（Windows，推荐）**——解包为目录，跑安装器；建档案、写 overrides、装包、装 persona、验证全自动，幂等可重跑：
 
 ```sh
 mkdir bundle && tar -xzf dist/mtl-academic-dsh-patent-0.1.6-alpha.1.tgz -C bundle --strip-components=1
-```
-
-```powershell
 powershell -ExecutionPolicy Bypass -File dist/install-patent-profile.ps1 -Name patent-demo -DistDir <dist目录>
 ```
 
-安装器仅面向 Windows；macOS/Linux 走方式 B（`%USERPROFILE%\.dsh` 即 `~/.dsh`，桌面版 dsh 垫片在 `~/.local/bin/dsh`）。
+macOS/Linux 无安装器，直接走方式 B——路径替换（`~/.dsh`、桌面版垫片 `~/.local/bin/dsh`、环境变量进 shell profile）见 INSTALL-NEW-PROFILE.md 的替换表。
 
-**方式 B · 手动安装**——四步走，适合不想跑脚本时：
-
-```sh
-# 1. 解包插件为目录（桌面端必须目录形态安装）
-mkdir bundle && tar -xzf dist/mtl-academic-dsh-patent-0.1.6-alpha.1.tgz -C bundle --strip-components=1
-
-# 2. 建 profile 并写入依赖 overrides（模板见 dist/README.md）
-
-# 3. 安装 + 装 persona（dist/persona.patch.yml 拷为档案的 cordis.patch.yml，
-#    或照 bundle README「The persona lives in the profile」一节手写）
-dsh plugin --profile patent-demo add "file:<DIST>/bundle"
-
-# 4. 可选：Python 服务（8 个 MCP 工具）
-uv tool install dist/deepseek_harness_patent_services-0.1.0-py3-none-any.whl
-# 系统环境变量 DSH_PATENT_SERVICES=1，重启桌面版
-```
-
-完整步骤、验收方法与已知边界见 [`dist/README.md`](dist/README.md)；安装器参数与故障排查见 [`dist/INSTALL-NEW-PROFILE.md`](dist/INSTALL-NEW-PROFILE.md)。
+**方式 B · 手动安装**——五步：解包 tarball 为 `bundle/` 目录（桌面端必须目录形态）→ 建 profile → 写 pnpm overrides → `dsh plugin add "file:<DIST>/bundle"` → 装 persona（`dist/persona.patch.yml` 拷为档案的 `cordis.patch.yml`）；可选追加 Python 服务（`uv tool install` wheel + 用户环境变量 `DSH_PATENT_SERVICES=1`，重启桌面版）。逐步命令见 [dist/README.md 的方式 B](dist/README.md)。
 
 ## 仓库结构
 
