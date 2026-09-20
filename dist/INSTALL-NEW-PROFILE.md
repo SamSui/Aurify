@@ -2,23 +2,37 @@
 
 > Audience: anyone with the Deepseek Harness Desktop (Tauri) app installed who
 > wants the Aurify patent-writing plugin in a **fresh dsh profile**, without
-> touching existing profiles. Windows paths below; the same layout works on
-> macOS/Linux with `~` in place of `%USERPROFILE%`.
+> touching existing profiles.
 >
-> Everything happens inside `%USERPROFILE%\.dsh\` — no admin rights, no npm
-> access needed. The Chinese walkthrough of the manual install path lives in
-> [README.md](README.md).
+> Everything happens inside the `.dsh` directory under your home — no admin
+> rights, no npm access needed. The Chinese walkthrough of the manual install
+> path lives in [README.md](README.md).
+>
+> **Windows vs macOS/Linux** — the quick-install script is Windows-only: it
+> locates the dsh CLI through the desktop app's Windows shim directory and
+> defaults to `%USERPROFILE%` paths. On macOS/Linux skip to
+> [Manual install](#manual-install-what-the-script-does-step-by-step) with the
+> substitution table below — the manual steps are the cross-platform path.
 
 ## Prerequisites
 
 | Requirement | Notes | How to check |
 |---|---|---|
-| Desktop app installed | Provides the dsh core and the `dsh` CLI shim | `%LOCALAPPDATA%\deepseek-harness\bin\dsh.cmd --version` prints a version |
+| Desktop app installed | Provides the dsh core and the `dsh` CLI shim | `dsh --version` prints a version (Windows shim: `%LOCALAPPDATA%\deepseek-harness\bin\dsh.cmd`; macOS/Linux: `~/.local/bin/dsh`) |
 | Release artifacts unpacked | Unpack the bundle tarball into a `bundle/` directory beside the package tarballs — `tar -xzf mtl-academic-dsh-patent-*.tgz -C bundle --strip-components=1` — and put them in any directory, e.g. `%USERPROFILE%\.dsh\plugin-dist\patent` | The installer's first step validates this |
-| Python services (optional) | The 8 MCP tools (export, Word parsing, figure rendering, experiments, prior-art search) | Either gate works: install the shipped wheel (`uv tool install deepseek_harness_patent_services-*.whl`) and set user-level `DSH_PATENT_SERVICES=1`, or set `DSH_PATENT_SERVICES_DIR` to a patent-services source checkout (`setx DSH_PATENT_SERVICES_DIR <dir>`); either way restart the desktop app afterwards, and all profiles inherit it |
+| Python services (optional) | The 8 MCP tools (export, Word parsing, figure rendering, experiments, prior-art search) | Either gate works: install the shipped wheel (`uv tool install deepseek_harness_patent_services-*.whl`) and set user-level `DSH_PATENT_SERVICES=1`, or set `DSH_PATENT_SERVICES_DIR` to a patent-services source checkout. User-level either way — `setx` on Windows, `export` in your shell profile on macOS/Linux — then restart the desktop app; all profiles inherit it |
 | Docker Desktop (optional) | Only for simulation experiments and drawio figure rendering | Start it manually when needed |
 
-## Quick install (recommended)
+## macOS/Linux substitutions for the manual steps
+
+| Windows path / command as written below | macOS / Linux |
+|---|---|
+| `%USERPROFILE%\.dsh\profiles\<name>\...` | `~/.dsh/profiles/<name>/...` |
+| `%LOCALAPPDATA%\deepseek-harness\bin\dsh` | `~/.local/bin/dsh` (the desktop app's shim; XDG convention, usually already on PATH) |
+| `%APPDATA%\io.github.hairyf.deepseek-harness-desktop\dependencies\dsh\...` | `~/.local/share/io.github.hairyf.deepseek-harness-desktop/dependencies/dsh/...` (macOS: `~/Library/Application Support/...`) |
+| `setx <VAR> <value>` (user env var) | add `export <VAR>=<value>` to `~/.zshrc` / `~/.bashrc` |
+
+## Quick install (recommended, Windows)
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File <dist-directory>\install-patent-profile.ps1 -Name patent-test

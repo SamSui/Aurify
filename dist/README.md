@@ -27,7 +27,11 @@ powershell -ExecutionPolicy Bypass -File install-patent-profile.ps1 -Name patent
 
 安装器一次性完成手动方式的全部步骤：校验分发物 → 建/刷新档案 → 写依赖与 overrides → 装包 → 装 persona（取自 `persona.patch.yml`）→ dump-config 验证。幂等可重跑；打印 `DONE` 即成功。参数说明与故障排查见 [`INSTALL-NEW-PROFILE.md`](INSTALL-NEW-PROFILE.md)（英文）。
 
+安装器仅面向 **Windows**（系统自带 PowerShell）。macOS/Linux 用户直接走方式 B：把 `%USERPROFILE%\.dsh` 换成 `~/.dsh`、桌面版 dsh 垫片在 `~/.local/bin/dsh`（而非 `%LOCALAPPDATA%\deepseek-harness\bin\dsh.cmd`）、用户环境变量写入 shell profile，其余步骤完全一致。
+
 ### 方式 B：手动安装
+
+以下以 Windows 路径书写；macOS/Linux 的路径换算见方式 A 末尾的说明。
 
 #### 1. 找到 dsh 命令
 

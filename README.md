@@ -35,6 +35,8 @@ mkdir bundle && tar -xzf dist/mtl-academic-dsh-patent-0.1.6-alpha.1.tgz -C bundl
 powershell -ExecutionPolicy Bypass -File dist/install-patent-profile.ps1 -Name patent-demo -DistDir <dist目录>
 ```
 
+安装器仅面向 Windows；macOS/Linux 走方式 B（`%USERPROFILE%\.dsh` 即 `~/.dsh`，桌面版 dsh 垫片在 `~/.local/bin/dsh`）。
+
 **方式 B · 手动安装**——四步走，适合不想跑脚本时：
 
 ```sh

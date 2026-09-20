@@ -1,8 +1,9 @@
 # install-patent-profile.ps1 — Aurify (dsh-patent) one-command profile installer
 #
 # Installs the Aurify patent-writing plugin into a fresh (or existing) dsh
-# profile on a machine where Deepseek Harness Desktop is installed. Idempotent:
-# safe to re-run.
+# profile on a Windows machine where Deepseek Harness Desktop is installed
+# (macOS/Linux: follow the manual steps in INSTALL-NEW-PROFILE.md instead).
+# Idempotent: safe to re-run.
 #
 # Usage (PowerShell):
 #   .\install-patent-profile.ps1 -Name patent-test
@@ -20,9 +21,10 @@
 #   6. Installs the persona (see -PersonaFrom; the bundle ships persona-free)
 #   7. Verifies the composed profile via dump-config
 #
-# Prereqs: desktop app installed. MCP export/render/experiment tools need the
-#   user-level env var DSH_PATENT_SERVICES_DIR (set once with setx, then
-#   restart the desktop app); experiments/rendering also need Docker Desktop.
+# Prereqs: desktop app installed. MCP export/render/experiment tools need a
+#   Python-services gate at user level — DSH_PATENT_SERVICES=1 (installed
+#   wheel) or DSH_PATENT_SERVICES_DIR (source checkout) — then restart the
+#   desktop app; experiments/rendering also need Docker Desktop.
 
 param(
   # The profile to create/install into (relative to ~/.dsh/profiles).
@@ -41,6 +43,15 @@ $ErrorActionPreference = "Stop"
 
 function Fail($message) { Write-Host "FAIL: $message" -ForegroundColor Red; exit 1 }
 function Step($message) { Write-Host "== $message" -ForegroundColor Cyan }
+
+# Windows-only by design: the dsh CLI discovery below reads the desktop app's
+# Windows shim directory (%LOCALAPPDATA%\deepseek-harness\bin\dsh.cmd) and the
+# profile paths default to %USERPROFILE%. Fail loud on pwsh/non-Windows runs
+# instead of a cryptic null-argument error. ($IsWindows is undefined on
+# Windows PowerShell 5.1, hence the version short-circuit.)
+if (($PSVersionTable.PSVersion.Major -ge 6) -and -not $IsWindows) {
+  Fail "this installer is Windows-only. On macOS/Linux follow the manual steps in INSTALL-NEW-PROFILE.md"
+}
 
 # 1. Locate the dsh CLI: the desktop shim knows the bundled core; fall back to PATH.
 $dshCmd = Join-Path $env:LOCALAPPDATA "deepseek-harness\bin\dsh.cmd"
@@ -213,5 +224,6 @@ Write-Host ""
 Write-Host "DONE: profile '$Name' installed." -ForegroundColor Green
 Write-Host "  - Restart the desktop app (fully quit + relaunch) to pick up the new profile."
 Write-Host "  - Pick the '$Name' profile in the desktop app, open a session in a patent project directory."
-Write-Host "  - MCP export/render/experiment tools need DSH_PATENT_SERVICES_DIR (user-level env);"
+Write-Host "  - MCP export/render/experiment tools need a Python-services gate (user-level env):"
+Write-Host "    DSH_PATENT_SERVICES=1 (installed wheel) or DSH_PATENT_SERVICES_DIR (source checkout);"
 Write-Host "    experiments and figure rendering also need Docker Desktop."
