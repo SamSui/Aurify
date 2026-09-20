@@ -170,6 +170,12 @@ describe('assessLoopState stage machine', () => {
     expect(unparseable.stage).toBe('review')
     expect(unparseable.gaps[0]?.detail).toContain('缺少可解析的总分')
 
+    // The score line the review renderer actually writes must parse: it wraps the
+    // label in markdown bold and uses a full-width colon before the value.
+    await writeFile(join(dir, 'review', 'project.review.md'), '**总分**：86 / 100\n', 'utf8')
+    const rendered = await assessLoopState(dir)
+    expect(rendered.stage).not.toBe('review')
+
     // A fresh passing report reopens the export gate, and done closes the loop.
     await writeFile(join(dir, 'review', 'project.review.md'), '总分 88\n', 'utf8')
     await mkdir(join(dir, 'exports'), { recursive: true })

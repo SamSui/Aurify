@@ -150,8 +150,11 @@ def _export_summary(written: str, root: Path) -> str:
     return f"{written}（内嵌附图 {len(figures)} 张{note}）"
 
 
-#: The review score line a report carries: ``总分 81``.
-_REVIEW_SCORE = re.compile(r"总分\s*(\d+)")
+#: The review score line a report carries: ``总分 81`` or ``**总分**：81 / 100``.
+#: The renderer wraps the label in markdown bold and puts a full-width colon
+#: before the value, so matching only ``总分\s*(\d+)`` fails on every report it
+#: actually writes.
+_REVIEW_SCORE = re.compile(r"总分[^\d\n]{0,4}(\d+)")
 
 #: The scope stamp marking a report as partial (never the whole-project verdict).
 _REVIEW_PARTIAL = "审查范围：部分"

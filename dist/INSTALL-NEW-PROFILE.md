@@ -126,7 +126,7 @@ The bundle ships **persona-free on purpose** (it is a capability layer any profi
 Copy-Item <dist-dir>\persona.patch.yml %USERPROFILE%\.dsh\profiles\<name>\cordis.patch.yml
 ```
 
-The canonical text is also documented in the bundle README ("The persona lives in the profile") — hand-write `cordis.patch.yml`'s `system-prompt.config.persona` from it if you prefer. **Without the persona the assistant has no gatekeeper behavior**: it will not assess ideas before drafting, route through the skills, or push back with publication numbers.
+The canonical text is also documented in the bundle README ("The persona lives in the profile") — hand-write `cordis.patch.yml`'s `system-prompt.config.personaPrefix` from it if you prefer. **Without the persona the assistant has no gatekeeper behavior**: it will not assess ideas before drafting, route through the skills, or push back with publication numbers.
 
 ### 7. Verify
 
@@ -134,7 +134,7 @@ The canonical text is also documented in the bundle README ("The persona lives i
 dsh --profile <name> --dump-config
 ```
 
-Check three things: the `tool-patent` / `patent-assets` / `command-patent-review` / `mcp-patent-services` rows are present; a `persona:` key appears; the log shows no `DANGLING`/`UNINSTALLING` lines (those mean step 2 was not directory-shaped). `workflow-ptc not found`-style warnings are benign cross-core no-ops.
+Check three things: the `tool-patent` / `patent-assets` / `command-patent-review` / `mcp-patent-services` rows are present; a `personaPrefix:` key appears; the log shows no `DANGLING`/`UNINSTALLING` lines (those mean step 2 was not directory-shaped). `workflow-ptc not found`-style warnings are benign cross-core no-ops.
 
 ## What you get
 

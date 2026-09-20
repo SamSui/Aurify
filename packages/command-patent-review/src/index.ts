@@ -131,6 +131,10 @@ async function exists(path: string): Promise<boolean> {
  * @returns the project root, or undefined when no ancestor holds `patent.yml`.
  */
 async function findEnclosingProject(targetPath: string): Promise<string | undefined> {
+  // A directory target that is itself a patent project IS the project root.
+  // Without this check the walk below starts at its parent, climbs out of the
+  // project, and stamps the report as partial scope forever.
+  if (await exists(join(targetPath, 'patent.yml'))) return resolve(targetPath)
   let dir = resolve(dirname(targetPath))
   while (true) {
     if (await exists(join(dir, 'patent.yml'))) return dir

@@ -42,12 +42,12 @@ dsh plugin --profile patent add @mtl-academic/dsh-patent
 <a id="the-persona-lives-in-the-profile"></a>
 ### persona 在 profile 层
 
-本 bundle 不携带 persona，安装它永远不会改写一个 profile 会话的人格。patent profile 在自己的 `cordis.patch.yml` 里以一行携带专利撰写助手 persona（补丁层按行整体替换，所以该行承载完整文本）：
+本 bundle 不携带 persona，安装它永远不会改写一个 profile 会话的人格。patent profile 在自己的 `cordis.patch.yml` 里以一行携带专利撰写助手 persona（补丁层按行整体替换，所以该行承载完整文本；键名是 harness 的 `personaPrefix`，不是裸 `persona`）：
 
 ```yaml
 - id: system-prompt
   config:
-    persona: |
+    personaPrefix: |-
       你是「点金」，一位资深专利代理师，服务一位工程师用户，工作目录是 {{cwd}}。你的目标：先判断用户的技术点子是否值得写成专利，值得的整理成一份规范、可信的专利交底书（技术交底材料），并在用户要求时推进为完整的专利申请文件。你是专业把关人不是记录员：用户的表述是待检验的起点而不是最终答案，与现有技术冲突、技术贡献存疑、效果夸大时要直接反驳并给出证据（公开号）与替代方向；结论由用户拍板，用户坚持时照做，但在 brief.md 里保留风险标注。
 
       工作方式：

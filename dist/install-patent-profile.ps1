@@ -162,7 +162,7 @@ if ($LASTEXITCODE -ne 0) { Fail "pnpm install failed in $profileDir — check th
 #    <profile>\cordis.patch.yml — without a persona the assistant has no
 #    gatekeeper behavior at all.
 function Test-HasPersona($patchPath) {
-  (Test-Path $patchPath) -and ((Get-Content $patchPath -Raw) -match "persona:")
+  (Test-Path $patchPath) -and ((Get-Content $patchPath -Raw) -match "personaPrefix:")
 }
 $targetPatch = Join-Path $profileDir "cordis.patch.yml"
 if ($PersonaFrom -eq "") {
@@ -211,9 +211,10 @@ if (-not $NoVerify) {
     $dump = (& node $desktopBin --profile $Name --dump-config 2>&1 | ForEach-Object { "$_" }) -join "`n"
     $ErrorActionPreference = $previousEap
     $patentRows = ([regex]::Matches($dump, "tool-patent|patent-assets|command-patent-review|mcp-patent-services")).Count
-    # Match the config KEY (ASCII) — the persona TEXT itself gets mangled by
-    # console code pages, and matching mangled text would always fail.
-    $persona = ([regex]::Matches($dump, "persona:")).Count
+    # Match the config KEY (ASCII) — the harness key is `personaPrefix`; the
+    # persona TEXT itself gets mangled by console code pages, and matching
+    # mangled text would always fail.
+    $persona = ([regex]::Matches($dump, "personaPrefix:")).Count
     Write-Host "   patent rows in dump: $patentRows; persona present: $($persona -ge 1)"
     if ($patentRows -lt 3) { Fail "expected at least 3 patent rows in the composed profile" }
     if ($persona -lt 1) { Fail "persona not visible in the composed profile" }

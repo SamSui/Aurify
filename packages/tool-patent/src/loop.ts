@@ -34,8 +34,8 @@ const DEFAULT_REVIEW_THRESHOLD = 80
 /** How far the score bar drops while the prior-art search is unreachable. */
 const DEGRADED_REVIEW_DELTA = 10
 
-/** The overall score line a review report carries: `总分 81`. */
-const REPORT_SCORE = /总分\s*(\d+)/
+/** The overall score line a review report carries: `总分 81` or `**总分**：81 / 100`. */
+const REPORT_SCORE = /总分[^\d\n]{0,4}(\d+)/
 
 /** The source-digest stamp a report carries: `> 源指纹：<16 hex chars>`. */
 const REPORT_FINGERPRINT = /^> 源指纹：([0-9a-f]{16})/m
@@ -372,7 +372,7 @@ async function reviewGap(root: string, effectiveThreshold: number, degraded: boo
 async function stalledReview(reviewDir: string, threshold: number): Promise<string | undefined> {
   const ledger = await readText(join(reviewDir, 'attempts.md'))
   if (ledger === undefined) return undefined
-  const scores = [...ledger.matchAll(/总分 (\d+)/g)]
+  const scores = [...ledger.matchAll(/总分[^\d\n]{0,4}(\d+)/g)]
     .map(match => Number(match[1]))
     .slice(-6)
   // Only the trailing run of below-threshold attempts matters; a passing
