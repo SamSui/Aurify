@@ -36,6 +36,7 @@
 **方式 A · 一键安装器（Windows，推荐）**——解包为目录，跑安装器；建档案、写 overrides、装包、装 persona、验证全自动，幂等可重跑：
 
 ```sh
+cd dist
 mkdir bundle && tar -xzf dist/mtl-academic-dsh-patent-0.1.6-alpha.1.tgz -C bundle --strip-components=1
 powershell -ExecutionPolicy Bypass -File dist/install-patent-profile.ps1 -Name patent-demo -DistDir <dist目录>
 ```
